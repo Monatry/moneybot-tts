@@ -1,11 +1,12 @@
 "use client";
 
-import { Anchor, ArrowLeft, ArrowRight, Move, Plus, X } from "lucide-react";
+import { Anchor, ArrowLeft, ArrowRight, HelpCircle, Move, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { AvatarStage } from "@/components/AvatarStage";
 import { Coin } from "@/components/Coin";
+import { ObsGuide } from "@/components/ObsGuide";
 import { MiniWaveform } from "@/components/Waveform";
 import { Slider } from "@/components/Slider";
 import { Toggle } from "@/components/Toggle";
@@ -14,6 +15,7 @@ import {
   loadAvatar,
   postAvatarMessage,
   prepareImage,
+  pushAvatarImagesToObs,
   resetAvatar,
   saveFrames,
   saveIdle,
@@ -21,6 +23,8 @@ import {
 } from "@/lib/avatarStore";
 import { appOrigin, withBasePath } from "@/lib/basePath";
 import { getBot, useBot } from "@/lib/bot";
+import { DEFAULT_OBS_URL, type ObsBridgeStatus } from "@/lib/obsBridge";
+import { pushAvatarToObs, useObsBridge } from "@/lib/useObsBridge";
 import {
   BOB_ANGLE_RANGE,
   BOB_ATTACK_RANGE,
@@ -55,6 +59,7 @@ const BACKGROUND_PRESETS = [
 export default function AvatarConfigPage() {
   const settings = useSettings();
   const bot = useBot();
+  const obsStatus = useObsBridge();
 
   const [idle, setIdle] = useState<StoredImage | null>(null);
   const [frames, setFrames] = useState<StoredImage[]>([]);
@@ -81,6 +86,15 @@ export default function AvatarConfigPage() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [overlayUrl, setOverlayUrl] = useState(withBasePath("/avatar"));
+  // The OBS connection fields are the one thing on this screen that is *not* a draft waiting
+  // for Save — they configure a live socket, and a URL you cannot see the result of typing
+  // is a URL you cannot debug. They are held locally only so that the socket reconnects when
+  // the field is finished with rather than on every keystroke.
+  const [obsUrlDraft, setObsUrlDraft] = useState(settings.obs.url);
+  const [obsPasswordDraft, setObsPasswordDraft] = useState(settings.obs.password);
+  const [obsPushed, setObsPushed] = useState(false);
+  const [obsSending, setObsSending] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Everything edited here is held in component state and only written to IndexedDB by
   // "Save avatar" — this is the one screen the handoff gives an explicit Save, so a dropped
@@ -94,6 +108,9 @@ export default function AvatarConfigPage() {
     // base path — `basePath` does not reach a string built by hand.
     setOverlayUrl(`${appOrigin()}/avatar`);
   }, []);
+
+  useEffect(() => setObsUrlDraft(settings.obs.url), [settings.obs.url]);
+  useEffect(() => setObsPasswordDraft(settings.obs.password), [settings.obs.password]);
 
   useEffect(() => setFps(settings.avatar.fps), [settings.avatar.fps]);
   useEffect(() => setCrossfade(settings.avatar.crossfade), [settings.avatar.crossfade]);
@@ -154,6 +171,10 @@ export default function AvatarConfigPage() {
     // this window does not reach it. Push the stored (normalized) values explicitly; the
     // images it re-reads from IndexedDB off the config-changed ping the saves above send.
     postAvatarMessage({ type: "settings", avatar: settingsStore.get().avatar });
+    // An overlay in OBS cannot read the IndexedDB written above — it is a different browser.
+    // The settings message reached it over the bridge with everything else; the images have
+    // to be carried there explicitly.
+    void pushAvatarImagesToObs();
     setSaved(true);
   }
 
@@ -170,7 +191,27 @@ export default function AvatarConfigPage() {
     setBob(DEFAULT_AVATAR.bob);
     updateSettings((prev) => ({ ...prev, avatar: DEFAULT_AVATAR }));
     postAvatarMessage({ type: "settings", avatar: settingsStore.get().avatar });
+    // Clears the images out of OBS too — the reset sends an empty set, which is a real set.
+    void pushAvatarImagesToObs();
     setSaved(false);
+  }
+
+  /** Commit the connection fields. Called on blur, so a socket is not re-dialled per keystroke. */
+  function commitObs(next: Partial<{ enabled: boolean; url: string; password: string }>) {
+    updateSettings((prev) => ({ ...prev, obs: { ...prev.obs, ...next } }));
+    setObsPushed(false);
+  }
+
+  async function sendToObs() {
+    // A push runs for seconds. Without this the button invites a second click on top of the
+    // first, and although the receiver now discards the abandoned stream, the visible result
+    // is still an avatar that takes two goes to appear for no reason the streamer can see.
+    setObsSending(true);
+    try {
+      setObsPushed(await pushAvatarToObs());
+    } finally {
+      setObsSending(false);
+    }
   }
 
   function testSpeak() {
@@ -210,6 +251,91 @@ export default function AvatarConfigPage() {
           </div>
 
           {error && <p className="error-line">{error}</p>}
+
+          {/* ── OBS browser source ─────────────────────────────────────
+              First, ahead of the images and the effects it carries, because it is the step
+              that decides whether any of them survive a stream: everything below is tuned
+              against the preview, and a streamer who never scrolls this far runs the overlay
+              as a browser window, which the browser stops drawing the moment it is covered. */}
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h4 style={{ margin: 0 }}>Send to OBS</h4>
+              <span className={styles.sectionNote}>for a browser source, instead of a window</span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ marginLeft: "auto" }}
+                onClick={() => setGuideOpen(true)}
+              >
+                <HelpCircle size={14} strokeWidth={2.75} /> How do I set this up?
+              </button>
+            </div>
+
+            <div className={styles.bgToggleRow}>
+              <Toggle
+                label="Connect to OBS"
+                size="sm"
+                checked={settings.obs.enabled}
+                onChange={(next) => commitObs({ enabled: next })}
+              />
+              <span className={styles.bgToggleText}>
+                Push the avatar straight into OBS over its WebSocket
+              </span>
+            </div>
+
+            {settings.obs.enabled && (
+              <>
+                <div className={styles.obsFields}>
+                  <label className={styles.obsField}>
+                    <span className={styles.obsLabel}>WebSocket URL</span>
+                    <input
+                      className={styles.obsInput}
+                      value={obsUrlDraft}
+                      placeholder={DEFAULT_OBS_URL}
+                      spellCheck={false}
+                      onChange={(e) => setObsUrlDraft(e.target.value)}
+                      onBlur={() => commitObs({ url: obsUrlDraft })}
+                      onKeyDown={(e) => e.key === "Enter" && commitObs({ url: obsUrlDraft })}
+                    />
+                  </label>
+                  <label className={styles.obsField}>
+                    <span className={styles.obsLabel}>Password</span>
+                    <input
+                      className={styles.obsInput}
+                      type="password"
+                      value={obsPasswordDraft}
+                      placeholder="from OBS ▸ Tools ▸ WebSocket Server Settings"
+                      onChange={(e) => setObsPasswordDraft(e.target.value)}
+                      onBlur={() => commitObs({ password: obsPasswordDraft })}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && commitObs({ password: obsPasswordDraft })
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className={styles.obsStatusRow}>
+                  <span className={styles[obsDotClass(obsStatus.state)]} aria-hidden />
+                  <span className={styles.obsStatusText}>{obsStatusText(obsStatus)}</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ marginLeft: "auto" }}
+                    onClick={() => void sendToObs()}
+                    disabled={obsStatus.state !== "connected" || obsSending}
+                  >
+                    {obsSending ? "Sending…" : obsPushed ? "Sent" : "Send avatar now"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className={styles.speedHint}>
+              {settings.obs.enabled
+                ? "Add a Browser source in OBS pointing at the overlay URL at the bottom of this page, then leave it be — OBS renders it off-screen, so it keeps animating whether or not anything is visible. Saving on this screen sends the images across; the bridge only carries them one way, so a browser source added later needs Send avatar now."
+                : "A browser source in OBS is its own browser: it cannot see the images or the settings stored here, which is why they have to be sent. Switch this on and the avatar goes to OBS directly, with none of the throttling a hidden or covered browser window is subject to."}
+            </div>
+          </section>
 
           {/* ── idle image ─────────────────────────────────────────── */}
           <section className={styles.section}>
@@ -767,6 +893,8 @@ export default function AvatarConfigPage() {
           )}
         </aside>
       </div>
+
+      <ObsGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   );
 }
@@ -775,6 +903,30 @@ export default function AvatarConfigPage() {
 
 function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`;
+}
+
+function obsDotClass(state: ObsBridgeStatus["state"]): "obsDotOn" | "obsDotWait" | "obsDotOff" {
+  if (state === "connected") return "obsDotOn";
+  if (state === "connecting") return "obsDotWait";
+  return "obsDotOff";
+}
+
+/**
+ * The connection in one line. Errors are shown verbatim rather than reduced to "failed":
+ * every one of them names something the streamer can go and change, and the difference
+ * between "OBS is not running" and "the password is wrong" is the whole diagnosis.
+ */
+function obsStatusText(status: ObsBridgeStatus): string {
+  switch (status.state) {
+    case "connected":
+      return status.note ?? `Connected to OBS${status.version ? ` ${status.version}` : ""}.`;
+    case "connecting":
+      return "Connecting…";
+    case "error":
+      return status.retrying ? `${status.message} Retrying…` : status.message;
+    default:
+      return "Not connected.";
+  }
 }
 
 /** Degrees with an explicit sign, and a real minus rather than a hyphen. */

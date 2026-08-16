@@ -376,6 +376,71 @@
   color: var(--text-muted-strong);
 }
 
+/* ── OBS bridge ─────────────────────────────────────────────── */
+
+.obsFields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.obsField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.obsLabel {
+  font-size: 12px;
+  color: var(--text-muted-strong);
+}
+.obsInput {
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid var(--color-divider-soft);
+  background: #fff;
+  padding: 0 14px;
+  font-size: 13.5px;
+  color: var(--text-strong, inherit);
+  min-width: 0;
+}
+.obsInput::placeholder {
+  color: var(--text-faint);
+}
+
+.obsStatusRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+}
+.obsStatusText {
+  font-size: 12.5px;
+  color: var(--text-muted-strong);
+}
+/* Three states, three colours — and a shape, because the row is read at a glance while the
+   streamer is looking at OBS rather than at this screen. */
+.obsDotOn,
+.obsDotWait,
+.obsDotOff {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.obsDotOn {
+  background: #35c46a;
+  box-shadow: 0 0 0 3px rgba(53, 196, 106, 0.18);
+}
+.obsDotWait {
+  background: #e0a11c;
+  box-shadow: 0 0 0 3px rgba(224, 161, 28, 0.18);
+}
+.obsDotOff {
+  background: var(--text-faint);
+  opacity: 0.5;
+}
+
 .actions {
   margin-top: auto;
   padding-top: 12px;

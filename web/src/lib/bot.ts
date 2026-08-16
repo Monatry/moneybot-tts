@@ -445,12 +445,25 @@ class Bot {
     // queue, and the alternative would read every redeem on the channel out loud.
     if (!wanted || wanted.toLowerCase() !== e.rewardTitle.toLowerCase()) return;
 
-    const text = input.length === 0 ? e.displayName : input;
+    let text = input.length === 0 ? e.displayName : input;
+    // Same as chat: the redeem's input box is where a viewer types, so the `[voice]` prefix
+    // has to work there too. A redeem of nothing but "[af_sky]" leaves no body, so the regex
+    // does not match and it is read as written — the same as that message in chat.
+    let voiceOverride: string | undefined;
+    if (settings.allowChatterVoiceOverride) {
+      const split = splitVoicePrefix(text);
+      if (split) {
+        voiceOverride = split.voice;
+        text = split.text;
+      }
+    }
+
     this.enqueue({
       id: nextId("redeem"),
       text,
       user: e.user,
       source: "redeem",
+      voiceOverride,
       estSeconds: estimateSeconds(text, settings.audio.playbackRate),
       receivedAt: Date.now(),
     });

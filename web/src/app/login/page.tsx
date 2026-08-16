@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Coin } from "@/components/Coin";
+import { GithubGlyph, SOURCE_URL } from "@/components/GithubGlyph";
 import { TwitchGlyph } from "@/components/TwitchGlyph";
 import { updateSettings, useSettings } from "@/lib/settings";
 import { normalizeToken } from "@/lib/twitchAuth";
@@ -154,6 +155,19 @@ export default function LoginPage() {
             Read the setup guide
           </a>
         </p>
+
+        {/* This screen has no nav to hang the source mark off, so it takes the panel's own
+            corner — out of the centred column, at the same weight as the meta line opposite. */}
+        <a
+          className={styles.source}
+          href={SOURCE_URL}
+          target="_blank"
+          rel="noreferrer noopener"
+          title="Source on GitHub"
+          aria-label="Source on GitHub"
+        >
+          <GithubGlyph size={18} />
+        </a>
       </section>
     </main>
   );

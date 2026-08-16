@@ -37,6 +37,11 @@ npm install
 npm run dev        # localhost:3000
 npm run build
 npm run typecheck  # tsc --noEmit
+
+# Landing-page voice samples. Stdlib python + ffmpeg, needs a running ../server; writes
+# public/samples/*.mp3 and the generated src/lib/previewSamples.ts. Not part of the build —
+# run it by hand when the line, the voice list or the TTS model changes.
+python3 tools/build-samples.py [http://127.0.0.1:8020]
 ```
 
 `npm run dev` builds whichever engine `./.env` names in `NEXT_PUBLIC_TTS_ENGINE` (unset =
@@ -187,11 +192,14 @@ has to be drawn by the other.
   200 px preview tile and a 1080p browser source compose identically. The caption's font size
   needs the measured height, which is the one `ResizeObserver` in the component.
 - The overlay window **hydrated its own copy of `localStorage` when it opened** and never sees
-  a later write from the dashboard. Every field it paints therefore has to arrive over
-  BroadcastChannel: `settings` carries the whole `settings.avatar` object (re-normalized on
+  a later write from the dashboard. Every field it paints therefore has to arrive over the
+  channel: `settings` carries the whole `settings.avatar` object (re-normalized on
   arrival — it is the one path in that has not been through the store) and `speaking` carries
   the flag *and* the line, so the caption appears and disappears with the audio exactly as the
   mouth does.
+- **There are two transports under `subscribeAvatarMessages`, and the overlay picks neither.**
+  It listens on both and paints whatever arrives. Which one is live depends on where the
+  overlay is running, and that is the whole of `lib/obsBridge.ts` — see below.
 - The three effects — crossfade, caption, bob — are **off by default**, and the baseline
   behaviour with all three off is the plain idle/talking swap the config screen has always
   described.
@@ -217,6 +225,92 @@ has to be drawn by the other.
   tempo varies, and every roll starts from rest where a change is invisible. `finished`
   rejects on cancel, so the chain has to swallow that or unmounting throws.
 
+### The OBS bridge
+
+`src/lib/obsBridge.ts` — the overlay's second transport, for when it runs as an **OBS browser
+source** rather than in a browser window.
+
+The reason it exists is that a browser window is a bad place for an overlay. Chrome stops
+producing frames for a page it considers not-visible — background tab, minimized, *or fully
+covered by another window* — so the avatar freezes exactly when a streamer has put something
+else on top of it. No page-level API opts out of that; the fix is to not be a browser window.
+But a browser source is CEF, with **its own profile**: no BroadcastChannel peer, no access to
+the IndexedDB the dashboard wrote, its own `localStorage`. So everything the overlay paints
+has to be carried there.
+
+obs-browser registers an obs-websocket vendor named `obs-browser` whose `emit_event` request
+dispatches a `CustomEvent` into every browser source. That is the hop. `postAvatarMessage`
+fans out to BroadcastChannel *and* this bridge; `subscribeAvatarMessages` listens on both.
+Nothing above those two functions knows a bridge exists.
+
+- **It is one-way, and that shapes everything.** `window.obsstudio` exposes OBS to the page
+  and gives it no route back out to obs-websocket, so the overlay can never ask for anything
+  — no hello, no retry, no acknowledgement. The dashboard therefore *pushes* the whole state
+  on connect (`setObsReadyHandler`), the overlay **caches the images it receives in its own
+  IndexedDB** so a restarted OBS paints before the dashboard reconnects, and the config screen
+  keeps a manual "Send avatar now" for the case neither covers. Do not add a request/response
+  shape here; there is no channel for the response.
+- **The images must be chunked, and the reason is not the WebSocket.** obs-websocket takes a
+  multi-megabyte frame happily; OBS then gets it into the browser source's renderer by
+  **concatenating a `new CustomEvent(...)` script around the payload and `Eval`ing it**, and
+  the `Eval`'s exception is captured and never handled. So an oversized payload fails
+  silently at both ends. The symptom is precise and misleading: `settings` and `speaking`
+  arrive, the overlay changes background and transparency, and the images simply never
+  appear — which reads as a bug in the image path rather than a size ceiling. Hence
+  `CHUNK_CHARS` (16 KB) and `PACE_MS`; both are empirical, and **raising either is the first
+  thing to suspect** if images stop arriving again.
+- **Every image message carries the `push` it belongs to, and this is load-bearing.** A push
+  runs for seconds and three things start one — connecting, Save, and the button — so two
+  streams overlapping is ordinary. Untagged, a second `images-begin` resets the set the first
+  was still filling and parts land against the wrong head; what you see is a set that arrives
+  *partially and differently each time*, which looks like a lossy transport rather than a
+  concurrency bug. Latest wins: the older push checks `pushSeq` and abandons itself, and the
+  receiver drops anything not tagged with the set it is assembling.
+- An incomplete set is **applied anyway**, with the gaps compacted out — a shorter talking
+  cycle beats leaving the scene with a stale avatar, or nothing at all on a first run.
+  `waitForObsDrain` runs between *slices*, but only `bufferedAmount` is visible from the page;
+  everything downstream is not, which is what `PACE_MS` is actually for.
+- **To debug anything in the overlay, attach devtools**: start OBS with
+  `--remote-debugging-port=9222` and open `http://localhost:9222` in Chrome. A browser source
+  has no visible console otherwise, which is why `createImageReceiver` logs whether a set was
+  applied or dropped and with what count.
+- **`ws://` from an `https://` page works here and only here.** Loopback is a potentially
+  trustworthy origin, so `ws://127.0.0.1:4455` is exempt from mixed-content blocking. Point it
+  at a LAN address and the browser blocks it before it is sent. `normalizeObs` deliberately
+  does not enforce loopback — a `wss://` OBS elsewhere is legitimate — so the error message is
+  what has to explain it.
+- **`emit_event` is a broadcast to every browser source in OBS**, hence the namespaced
+  `OBS_EVENT_NAME`. A source that is not the overlay receives an event it has never heard of.
+- **The push is delayed ~2 s after Identified.** OBS brings its WebSocket server up around the
+  same time as it loads the scene collection, not reliably after it, and a push that wins that
+  race is dispatched at a source with no listener attached yet — unrecoverable, per the
+  one-way rule.
+- A wrong password or an unusable URL **latches `fatal`** and stops the retry loop. Without it
+  the effect in `useObsBridge` re-dials on every navigation between the two screens that use it.
+- `useObsBridge` is called by the dashboard and the config screen, **never by `/avatar`** — an
+  overlay has nothing to push, and one inside OBS would be dialling the OBS that renders it.
+  Like `bot.ts`, the bridge is a module singleton and is deliberately **not** disconnected on
+  unmount.
+- `components/ObsGuide.tsx` is the setup walkthrough behind "How do I set this up?", and it
+  leads with *why* rather than the steps: every step happens in another program, and the
+  payoff is invisible until it already works, so a streamer with no reason to paste a password
+  into a text field will reasonably decline. Its screenshots are the **first and only thing in
+  `public/`** — which the Dockerfile now copies explicitly, because `output: "standalone"`
+  omits `public/` exactly the way it omits `.next/static`. That failure mode is invisible in
+  `npm run dev` and a 404 in the container.
+- The bridge is the **first** section on `/avatar-config`, above the images and the effects,
+  and the dashboard's "Open avatar view" goes through
+  `dashboard/AvatarWindowNotice.tsx` before it opens anything: the throttling above is
+  invisible while setting up and only shows itself mid-stream, so both screens say it before
+  a streamer commits to the window. The notice's useful action is the route to
+  `/avatar-config`, not the cancel, which is why it is its own dialog rather than
+  `ConfirmDialog`. `ObsGuide`'s last step says *further down this page* for the same reason —
+  the background panel is now below the bridge, not above it.
+- The screenshots are redacted copies. OBS's Connect Info panel shows the WebSocket password
+  in clear **and encodes it again in the Connect QR beside it** — both are painted out. The
+  originals are the two PNGs in this directory's root; regenerate from those, not from
+  `public/`, and redact both spots again.
+
 ### Storage
 
 | What | Where |
@@ -225,6 +319,7 @@ has to be drawn by the other.
 | Per-chatter voices | `localStorage` `moneybot.uservoices.v1` (own key so a settings rewrite can't clobber it) |
 | Bits read today | `localStorage` `moneybot.bitsToday.v1`, keyed by date |
 | Avatar images | IndexedDB `moneybot-avatar` (up to 4 MB each; would blow the localStorage budget) |
+| Avatar images, again | the same store in **OBS's** CEF profile, written by the overlay from what the bridge pushed. A cache, not a source of truth — `cacheAvatar` writes it without the config-changed ping, which in that profile would only come back to the overlay that just wrote it |
 | Kokoro weights (browser engine) | Cache Storage, written by transformers.js — not ours, not cleared by "clear settings", and the reason a reload is fast after the first one |
 
 `settings.ts` merges stored blobs **one level deep**, not with a flat spread — an older blob
@@ -289,21 +384,70 @@ fit in `estimateSeconds` (~0.06 s/char + 0.3 s fixed). Re-measure if the TTS mod
 
 | Route | Screen |
 | --- | --- |
-| `/` | redirects by state: login → setup → dashboard |
+| `/` | public landing page (handoff screen `2a`) — see below |
 | `/login` | Twitch OAuth, or channel + pasted token |
 | `/setup` | triggers and audio preferences |
 | `/dashboard` | queue, chat, controls |
-| `/avatar-config` | idle image, talking frames, fps, background, crossfade / caption / bob |
+| `/avatar-config` | idle image, talking frames, fps, background, crossfade / caption / bob, the OBS connection |
 | `/avatar` | OBS browser source, transparent background |
 | `/auth/callback` | reads the OAuth fragment and `postMessage`s it to the opener |
 
 `window.__moneybot` exposes the runtime in development builds only.
 
+### The landing page
+
+`/` was an entry router — a spinner that read `localStorage` and replaced itself with
+`/login`, `/setup` or `/dashboard`. The handoff's navigation rule now starts a step earlier
+("home page → login → …"), so it is a real page: the URL a streamer gets sent in chat, which
+has to explain the app to somebody who has never heard of it.
+
+- **The redirect is gone, on purpose.** Sending a signed-in visitor straight to `/dashboard`
+  was the obvious alternative and makes the landing page unreachable for exactly the person
+  most likely to want to link it. What survives is the *destination*: both "Sign in with
+  Twitch" buttons become "Open dashboard" / "Finish setup" once a token exists, so a returning
+  streamer is still one click away. `signedIn` is false pre-hydration, which is correct — the
+  server render is what a first-time visitor sees.
+- **"Play preview" plays the app's real voices, pre-rendered — it does not synthesise.** The
+  handoff specified `speechSynthesis`, which would mean demonstrating the app with whatever
+  voice the visitor's OS ships, i.e. the thing this app replaces. Synthesising for real in the
+  page is worse in both builds: the browser engine would pull 86 MB of weights before an
+  unsigned-in visitor heard anything, and the server engine would point a public page at the
+  Kokoro relay. So `tools/build-samples.py` renders the line once from `../server` into
+  `public/samples/<voice>.mp3` — one ~40 KB clip per English voice, fetched on click.
+  - `src/lib/previewSamples.ts` is **generated by that same script** and must not be
+    hand-edited: the audio and the list have to move together, which is why one script writes
+    both. Re-run it to change the line, add a voice or retire one.
+  - The line is the bot's own cheer phrasing (`${displayName} cheered ${bits} bits: ${body}`,
+    from `handleChat`), so the page's claim to read it "the way your viewers will" is literal.
+    The one departure is spelling `coin_gremlin` without the underscore — espeak pronounces
+    punctuation inside a word.
+  - **`af_nicole` is excluded by request**, hence 27 clips rather than 28. The exclusion lives
+    in the generator's `EXCLUDE`.
+  - The voice is re-rolled every press and never repeats back to back — a second press
+    demonstrating the range is the entire reason for using the real engine here. Which voice
+    it landed on is deliberately **not** labelled: a line that exists only while playing
+    reflows the card under the button the visitor just pressed.
+  - **The muted play-then-pause in `useCheerPreview` is load-bearing.** The chime leads by
+    ~420 ms, and a `play()` that first happens inside that timer has lost the user gesture, so
+    iOS Safari refuses it. Unlocking the element inside the click is what buys the delay; the
+    mute is so the unlock makes no sound. A watchdog bounds the talking state either way — the
+    button must never be a dead control.
+- **Wormo (`public/avatar-{idle,talk}.png`) is shipped art, not a placeholder** — the first
+  real assets the handoff has carried. They are downscaled to 300×371 from the 700×866
+  originals in `design_handoff_moneybot_tts/design/assets/`; regenerate from those. Like the
+  OBS screenshots they live in `public/`, which `output: "standalone"` omits and the
+  Dockerfile copies explicitly.
+- The **login screen also changed in that handoff revision** (Twitch OAuth only, the manual
+  channel + token form removed, a three-item reassurance list in its place). That was left
+  alone by request — this pass was the homepage and nothing else.
+
 ## Design handoff
 
 `design_handoff_moneybot_tts/` is **reference material, not source** — a static HTML
-prototype of the five designed screens. It is excluded from `tsconfig.json` and from Next's
-file tracing, and `support.js` in there is the prototype's own runtime, to be ignored.
+prototype of the six designed screens (`2a` home, then `1a`–`1e`). It is excluded from
+`tsconfig.json` and from Next's file tracing, and `support.js` in there is the prototype's own
+runtime, to be ignored. Its `design/assets/` is the one exception to "not source": the two
+Wormo PNGs there are real artwork, and `public/avatar-*.png` are downscales of them.
 
 The design took precedence wherever it disagreed with the desktop app; `README.md` has the
 full table of what changed and the deliberate departures from the design. Tokens live in
@@ -332,6 +476,15 @@ docker compose -f docker-compose.browser.yaml logs -f
 Both compose files pin a `name:` (`moneytts`, `moneytts-browser`), which is what keeps their
 images and containers from colliding — without it they would be one project and each `up`
 would replace the other.
+
+**Run both after every change, as the last step of the change.** Independent stacks is the
+useful property here and also the trap: almost everything in this tree is shared (everything
+above `src/lib/ttsClient.ts`), so an edit belongs in both containers, but nothing rebuilds the
+other one for you — `up` on one is silently a no-op for the other, and the stack you forgot
+keeps serving the old bundle until someone notices on a stream. There is no dev server running
+against either, and the host's `node` is v10, so a rebuild is also the only way the change gets
+executed at all. Nothing here is hot-reloaded: `basePath`, the engine and the Twitch client ID
+are baked in at build time, so `--build` is not optional and `restart` does nothing.
 
 - Each container serves the `output: "standalone"` bundle on its own port 3000, published to
   **`127.0.0.1:3100`** and **`127.0.0.1:3101`**. Loopback only — the root nginx runs

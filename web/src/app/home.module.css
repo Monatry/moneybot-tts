@@ -1,0 +1,598 @@
+/*
+ * Screen 2a — the public landing page.
+ *
+ * The design frames it at 1240px with 44px side padding. That padding is a custom property
+ * so the whole page narrows in one place: every band below (brand row, hero, audience strip,
+ * name band) reads `--pad` rather than repeating the number.
+ */
+
+.page {
+  position: relative;
+  min-height: 100%;
+  background: var(--color-bg);
+  /* The decorative circle bleeds off the top-right corner; without this it widens the page. */
+  overflow: hidden;
+}
+
+.shell {
+  position: relative;
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  --pad: 44px;
+}
+
+.circle {
+  position: absolute;
+  right: -220px;
+  top: -180px;
+  width: 620px;
+  height: 620px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fdf7e2, #f7e9b9 62%, #f1dd9d);
+  pointer-events: none;
+}
+
+/* — a. brand row — */
+.brandRow {
+  position: relative;
+  padding: 26px var(--pad) 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.wordmark {
+  font-family: var(--font-heading);
+  font-size: 20px;
+}
+.brandActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.source {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text-faint);
+}
+.source:hover {
+  color: var(--color-accent-700);
+  background: rgba(27, 24, 21, 0.06);
+}
+.brandCta {
+  height: 42px;
+  padding-inline: 20px;
+}
+
+/* — b. hero — */
+.hero {
+  position: relative;
+  padding: 34px var(--pad) 40px;
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  gap: 44px;
+  align-items: start;
+}
+.heroCopy {
+  padding-top: 24px;
+}
+.heroTitle {
+  font-size: 66px;
+  line-height: 1;
+  margin: 16px 0 20px;
+  max-width: 12ch;
+}
+.heroBody {
+  font-size: 19px;
+  line-height: 1.5;
+  color: rgba(27, 24, 21, 0.68);
+  max-width: 44ch;
+  margin: 0;
+}
+.heroActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+.heroCta {
+  height: 54px;
+  padding-inline: 26px;
+  font-size: 16px;
+  gap: 10px;
+}
+.heroReassure {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 22ch;
+  line-height: 1.4;
+}
+.heroError {
+  margin-top: 10px;
+}
+
+/* — b (cont). the three numbered explainer cards — */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 40px;
+}
+.step {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: 26px;
+  padding: 20px;
+}
+.stepGold {
+  border-color: var(--color-accent-300);
+}
+.stepPurple {
+  border-color: var(--color-accent-2-300);
+}
+.stepIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f2eee3;
+  display: grid;
+  place-items: center;
+  color: var(--color-neutral-800);
+  margin-bottom: 12px;
+}
+.stepIconGold {
+  background: var(--color-accent-200);
+  color: var(--color-accent-800);
+}
+.stepIconPurple {
+  background: var(--color-accent-2-200);
+  color: var(--color-accent-2-800);
+}
+.stepDollar {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  line-height: 1;
+}
+.stepTitle {
+  font-weight: 700;
+  font-size: 14.5px;
+  margin-bottom: 4px;
+}
+.stepBody {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted-strong);
+}
+
+/* — b (cont). right column: chat demo + avatar card — */
+.heroSide {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.demo {
+  background: var(--color-bg);
+  border: 1px solid rgba(27, 24, 21, 0.1);
+  border-radius: 30px;
+  box-shadow: 0 14px 40px rgba(30, 25, 10, 0.14);
+  overflow: hidden;
+}
+.demoHead {
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(27, 24, 21, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--color-surface);
+}
+.demoDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-2-500);
+  flex: none;
+}
+.demoTitle {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.demoViewers {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.demoLive {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-accent-2-700);
+  background: var(--color-accent-2-100);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.demoLines {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.chatBody {
+  color: rgba(27, 24, 21, 0.75);
+}
+
+.event {
+  border-radius: 18px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.eventCheer {
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-300);
+}
+.eventRedeem {
+  background: var(--color-accent-2-100);
+  border: 1px solid var(--color-accent-2-300);
+}
+.eventBadge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.eventBadgeCheer {
+  background: var(--color-accent-200);
+  color: var(--color-accent-800);
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+}
+.eventBadgeRedeem {
+  background: var(--color-accent-2-200);
+  color: var(--color-accent-2-800);
+}
+.eventText {
+  min-width: 0;
+}
+.eyebrowCheer {
+  font-size: 11px;
+  color: var(--color-accent-700);
+  margin-bottom: 2px;
+}
+.eyebrowRedeem {
+  font-size: 11px;
+  color: var(--color-accent-2-700);
+  margin-bottom: 2px;
+}
+.cheerName {
+  color: var(--color-accent-800);
+  font-weight: 700;
+}
+.cheerBody {
+  color: var(--color-accent-900);
+}
+.redeemName {
+  color: var(--color-accent-2-800);
+  font-weight: 700;
+}
+.redeemBody {
+  color: var(--color-accent-2-900);
+}
+/* The five chat names carry the handoff's per-user tints. */
+.nameA {
+  color: #0f7b6c;
+  font-weight: 700;
+}
+.nameB {
+  color: #b3355a;
+  font-weight: 700;
+}
+.nameC {
+  color: #5f7b0f;
+  font-weight: 700;
+}
+
+.demoFoot {
+  padding: 14px 20px 18px;
+  border-top: 1px solid rgba(27, 24, 21, 0.08);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.playBtn {
+  height: 46px;
+  padding-inline: 22px;
+  gap: 10px;
+  font-size: 15px;
+}
+.demoCaption {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* — b (cont). avatar card — */
+.avatarCard {
+  position: relative;
+  border-radius: 30px;
+  border: 1px solid rgba(27, 24, 21, 0.1);
+  background: var(--color-surface);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  overflow: hidden;
+}
+.avatarStage {
+  position: relative;
+  width: 132px;
+  height: 150px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.avatarImg {
+  width: 118px;
+  height: 146px;
+  object-fit: contain;
+  display: block;
+}
+/*
+ * The talking state is two complementary tracks flipping at .22s rather than a crossfade:
+ * the mouth is the whole point, so it has to snap. `steps(1,end)` on both tracks is what
+ * keeps exactly one of them visible at a time.
+ */
+.avatarTalk {
+  position: relative;
+  width: 118px;
+  height: 146px;
+  animation: mb-wiggle 0.5s ease-in-out infinite;
+}
+.avatarFrame {
+  position: absolute;
+  inset: 0;
+}
+.frameClosed {
+  animation: mb-flip 0.22s steps(1, end) infinite;
+}
+.frameOpen {
+  animation: mb-flip-b 0.22s steps(1, end) infinite;
+}
+.ring {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent-500);
+  animation: mb-ring 1.1s ease-out infinite;
+  pointer-events: none;
+}
+
+.avatarCopy {
+  min-width: 0;
+}
+.eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  margin-bottom: 6px;
+}
+.avatarHeading {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  line-height: 1.25;
+  color: var(--color-accent-900);
+  margin-bottom: 8px;
+}
+.avatarBody {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted-strong);
+}
+.avatarTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* — c. audience strip — */
+.audience {
+  position: relative;
+  margin: 0 var(--pad) 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.audienceCard {
+  background: var(--color-bg);
+  border: 1px solid rgba(27, 24, 21, 0.1);
+  border-radius: 30px;
+  padding: 24px 26px;
+}
+.audienceCardPurple {
+  border-color: var(--color-accent-2-300);
+}
+.audienceEyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+.audienceEyebrowPurple {
+  color: var(--color-accent-2-700);
+}
+.audienceQuestion {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  line-height: 1.3;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+.audienceAnswer {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-muted-strong);
+}
+
+/* — d. about the name — */
+.nameBand {
+  position: relative;
+  margin: 0 var(--pad) 40px;
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-300);
+  border-radius: 34px;
+  padding: 30px 36px;
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 40px;
+  align-items: center;
+}
+.nameHeading {
+  margin: 0 0 10px;
+  color: var(--color-accent-900);
+}
+.namePara {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--color-accent-800);
+  max-width: 56ch;
+}
+.namePara + .namePara {
+  margin-top: 12px;
+}
+.claims {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.claim {
+  background: var(--color-bg);
+  border-radius: 24px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.claimBadge {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.claimBadgeGold {
+  background: var(--color-accent-200);
+  font-family: var(--font-heading);
+  font-size: 17px;
+  color: var(--color-accent-800);
+}
+.claimBadgePurple {
+  background: var(--color-accent-2-200);
+  color: var(--color-accent-2-800);
+}
+.claimTitle {
+  font-weight: 700;
+  font-size: 14px;
+}
+.claimBody {
+  font-size: 12.5px;
+  color: var(--text-muted-strong);
+}
+
+/*
+ * Responsive. The handoff asks for one thing: below ~1000px the hero stacks to one column
+ * with the chat demo under the copy. The rest follows from that — a 2-up strip and a
+ * 1.25fr/1fr band have nowhere to go on a phone either.
+ */
+@media (max-width: 1000px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  .heroCopy {
+    padding-top: 8px;
+  }
+  .heroTitle {
+    font-size: 52px;
+  }
+  .nameBand {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    --pad: 20px;
+  }
+  .heroTitle {
+    font-size: 42px;
+  }
+  .steps,
+  .audience {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .avatarCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .demoFoot {
+    flex-wrap: wrap;
+  }
+}
+
+/* — motion — */
+@keyframes mb-flip {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes mb-flip-b {
+  0%,
+  49% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes mb-wiggle {
+  0%,
+  100% {
+    transform: rotate(-1.5deg) translateY(0);
+  }
+  50% {
+    transform: rotate(1.5deg) translateY(-4px);
+  }
+}
+@keyframes mb-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}

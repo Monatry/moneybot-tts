@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { DEFAULT_OBS_URL } from "./obsBridge";
 
 /**
  * Everything the app remembers between visits, in the shape the handoff's "State
@@ -37,6 +38,8 @@ export interface Settings {
     masterVolume: number;
   };
   avatar: AvatarSettings;
+  /** How the overlay is reached when it runs as an OBS browser source. */
+  obs: ObsSettings;
   /** Browser engine only — ignored, but still stored, by a server-engine build. */
   localTts: LocalTtsSettings;
   /** Whether a chatter may repin their own voice with a `[voice]` prefix. */
@@ -59,6 +62,42 @@ export interface Settings {
 export interface LocalTtsSettings {
   device: "auto" | "wasm" | "webgpu";
   dtype: "auto" | "fp32" | "fp16" | "q8" | "q4" | "q4f16";
+}
+
+/**
+ * The obs-websocket connection the overlay is pushed through when it runs inside OBS.
+ *
+ * Off by default: the overlay in a browser window needs none of this, and a bridge that
+ * dialled a local port unasked would be a connection attempt nobody requested.
+ *
+ * The password is stored in plaintext next to the Twitch token, and for the same reason —
+ * localStorage is all a browser offers. It is worth less than the token: it authorises
+ * control of an OBS running on this machine, by something already running on this machine.
+ */
+export interface ObsSettings {
+  enabled: boolean;
+  url: string;
+  password: string;
+}
+
+export const DEFAULT_OBS: ObsSettings = { enabled: false, url: DEFAULT_OBS_URL, password: "" };
+
+/**
+ * A URL the browser will actually dial. Anything that is not `ws://` or `wss://` falls back
+ * to the default rather than reaching `new WebSocket`, where it throws synchronously.
+ *
+ * Note what is *not* enforced: a non-loopback host. It is very nearly always wrong — a plain
+ * `ws://` to anywhere else is blocked as mixed content on an https page, and OBS binds
+ * loopback by default — but someone deliberately reaching a `wss://` OBS on another machine
+ * is a legitimate setup, and the connection error says so clearly enough.
+ */
+function normalizeObs(value: Partial<ObsSettings> | undefined): ObsSettings {
+  const url = (value?.url ?? "").trim();
+  return {
+    enabled: !!value?.enabled,
+    url: /^wss?:\/\/.+/i.test(url) ? url : DEFAULT_OBS.url,
+    password: typeof value?.password === "string" ? value.password : "",
+  };
 }
 
 export const LOCAL_TTS_DEVICES = ["auto", "wasm", "webgpu"] as const;
@@ -240,6 +279,7 @@ export const DEFAULT_SETTINGS: Settings = {
     masterVolume: 0.72,
   },
   avatar: DEFAULT_AVATAR,
+  obs: DEFAULT_OBS,
   localTts: DEFAULT_LOCAL_TTS,
   allowChatterVoiceOverride: true,
   setupComplete: false,
@@ -265,6 +305,7 @@ export function normalize(s: Settings): Settings {
       masterVolume: clamp(s.audio.masterVolume, 0, 1),
     },
     avatar: normalizeAvatar(s.avatar),
+    obs: normalizeObs(s.obs),
     localTts: normalizeLocalTts(s.localTts),
   };
 }
@@ -348,6 +389,7 @@ function load(): Settings {
       // `normalizeAvatar` does its own one-level-deep merge, so a blob written before the
       // crossfade/caption/bob settings existed comes back with all three defaulted off.
       avatar: normalizeAvatar(parsed.avatar),
+      obs: normalizeObs(parsed.obs),
       localTts: normalizeLocalTts(parsed.localTts),
       allowChatterVoiceOverride:
         parsed.allowChatterVoiceOverride ?? DEFAULT_SETTINGS.allowChatterVoiceOverride,

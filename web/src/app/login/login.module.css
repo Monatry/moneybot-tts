@@ -132,6 +132,25 @@
   margin: 0;
 }
 
+/* Absolute rather than in the flow: the sign-in column is centred as a block, and a link
+   appended to it would push that block off-centre for two words nobody comes here to read. */
+.source {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.source:hover {
+  color: var(--color-accent-700);
+  background: var(--color-accent-100);
+}
+
 /* Below ~1100px the marketing column is decoration competing for space; drop it and let
    the sign-in panel take the screen. Under ~700px the app is out of scope per the handoff,
    but the login screen at least stays usable. */

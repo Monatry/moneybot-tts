@@ -33,3 +33,21 @@ export function withBasePath(path: string): string {
 export function appOrigin(): string {
   return `${window.location.origin}${BASE_PATH}`;
 }
+
+/**
+ * The overlay URL to paste into an OBS browser source: `appOrigin() + "/avatar"`, except that
+ * a leading `private.` is dropped from the host.
+ *
+ * In the deployed pair the `private.` host is the gated one, and a browser source is a bare
+ * CEF with no way through a login — so a streamer copying what their own address bar says
+ * hands OBS a sign-in page instead of the avatar. The public host serves the same `/avatar`
+ * route, and the overlay paints only what the bridge pushes it, so which engine that build
+ * synthesises with is nothing to it.
+ *
+ * A host with no such prefix is returned untouched, which covers dev and any single-host
+ * deployment.
+ */
+export function obsOverlayUrl(): string {
+  const { protocol, host } = window.location;
+  return `${protocol}//${host.replace(/^private\./, "")}${BASE_PATH}/avatar`;
+}

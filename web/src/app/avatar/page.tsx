@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { AvatarStage } from "@/components/AvatarStage";
 import {
+  cacheAvatar,
+  createImageReceiver,
+  isInsideObs,
   loadAvatar,
   subscribeAvatarMessages,
   type AvatarMessage,
@@ -24,8 +27,19 @@ import styles from "./overlay.module.css";
  * With no images uploaded it draws **nothing**. A placeholder here would be a logo sitting
  * in the middle of a live scene until the streamer noticed it.
  *
- * It shares no React tree with the dashboard — it is a separate window. Images come from
- * IndexedDB (same origin), and speaking state arrives over BroadcastChannel.
+ * It shares no React tree with the dashboard — it is a separate window, and in the case this
+ * route exists for, a separate *browser*. Which of the two it is decides where everything it
+ * paints comes from:
+ *
+ * - **A window of the same browser.** Images come from IndexedDB, which the dashboard wrote,
+ *   and state arrives over BroadcastChannel.
+ * - **An OBS browser source.** CEF has its own storage and no BroadcastChannel peer here, so
+ *   both arrive over the obs-websocket bridge instead. The images are then kept in *this*
+ *   profile's IndexedDB, which is what a restarted OBS paints from before the dashboard has
+ *   reconnected — the bridge is one-way, so an overlay cannot ask for them back.
+ *
+ * Neither case is detected up front: it subscribes to both transports and paints whatever
+ * arrives.
  */
 export default function AvatarOverlay() {
   const [idle, setIdle] = useState<StoredImage | null>(null);
@@ -63,6 +77,16 @@ export default function AvatarOverlay() {
     };
     refresh();
 
+    // Stateful across messages — an image set arrives in pieces and is applied only once the
+    // count `images-begin` promised has been assembled.
+    const receiver = createImageReceiver((complete) => {
+      if (cancelled) return;
+      setIdle(complete.idle);
+      setFrames(complete.frames);
+      void cacheAvatar(complete);
+    });
+    const inObs = isInsideObs();
+
     const unsubscribe = subscribeAvatarMessages((m: AvatarMessage) => {
       if (m.type === "speaking") {
         setSpeaking(m.speaking);
@@ -71,11 +95,19 @@ export default function AvatarOverlay() {
         // Normalized again on arrival: the message crosses a window boundary, so this is the
         // one path into these values that has not been through the settings store.
         setAvatar(normalizeAvatar(m.avatar));
-      } else refresh();
+      } else if (m.type === "config-changed") {
+        // Only worth acting on where the dashboard and this window share a store. Inside OBS
+        // the store is this overlay's own cache, so re-reading it would repaint the images
+        // that are about to be replaced by the push following this ping.
+        if (!inObs) refresh();
+      } else {
+        receiver.accept(m);
+      }
     });
     return () => {
       cancelled = true;
       unsubscribe();
+      receiver.dispose();
     };
   }, []);
 

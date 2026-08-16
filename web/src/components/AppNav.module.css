@@ -14,3 +14,20 @@
   align-items: center;
   gap: 10px;
 }
+
+/* Quiet by design: an icon at the very end of the bar, at the weight of the muted text
+   rather than of the buttons beside it, so it reads as a mark and not another control. */
+.source {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.source:hover {
+  color: var(--color-accent-700);
+  background: var(--color-accent-100);
+}
