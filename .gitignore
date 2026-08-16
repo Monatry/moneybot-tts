@@ -1,0 +1,19 @@
+# Per-component ignores live in server/.gitignore and web/.gitignore — they are
+# scoped on purpose. `*.wav` is ignored under server/ (rendered samples, always
+# reproducible) but *tracked* under voice-guide/public/samples, where the wavs
+# are the page's content. Do not lift that rule up here.
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local env files, anywhere
+.env
+.env.local
+.env.*.local

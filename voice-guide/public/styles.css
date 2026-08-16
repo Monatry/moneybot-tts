@@ -1,0 +1,581 @@
+/*
+ * Monatry TTS voice selector.
+ *
+ * Two sources, deliberately:
+ *
+ *   - Shape from the web app (`TTS Website/src/app/globals.css`) — its radii, spacing scale,
+ *     Caprasimo-over-Figtree type, and the tag/input/pill components, trimmed to what this one
+ *     page uses. The app's sliders, dialogs and nav are not here.
+ *   - Colour from the shop (`ringo-shop/src/app/globals.css`) — the kawaii palette, replacing
+ *     the app's gold-on-cream. See the :root block for the mapping.
+ *
+ * The fonts are the same files the app serves, copied out of its next/font build rather than
+ * pulled from Google — a static page has no build step to inline them, and the page should not
+ * need a third-party request to look right.
+ */
+
+/* — fonts — */
+/* Two subsets each, with the unicode-ranges next/font generated. Everything outside them
+   (the Japanese, Chinese and Hindi sample lines) falls through to the CJK/Devanagari stack
+   in --font-body below; neither face has those glyphs. */
+@font-face {
+  font-family: Caprasimo;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/caprasimo-latin.woff2) format("woff2");
+  unicode-range: u+00??, u+0131, u+0152-0153, u+02bb-02bc, u+02c6, u+02da, u+02dc, u+0304, u+0308,
+    u+0329, u+2000-206f, u+20ac, u+2122, u+2191, u+2193, u+2212, u+2215, u+feff, u+fffd;
+}
+@font-face {
+  font-family: Caprasimo;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/caprasimo-latin-ext.woff2) format("woff2");
+  unicode-range: u+0100-02ba, u+02bd-02c5, u+02c7-02cc, u+02ce-02d7, u+02dd-02ff, u+0304, u+0308,
+    u+0329, u+1d00-1dbf, u+1e00-1e9f, u+1ef2-1eff, u+2020, u+20a0-20ab, u+20ad-20c0, u+2113,
+    u+2c60-2c7f, u+a720-a7ff;
+}
+@font-face {
+  font-family: Figtree;
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(fonts/figtree-latin.woff2) format("woff2");
+  unicode-range: u+00??, u+0131, u+0152-0153, u+02bb-02bc, u+02c6, u+02da, u+02dc, u+0304, u+0308,
+    u+0329, u+2000-206f, u+20ac, u+2122, u+2191, u+2193, u+2212, u+2215, u+feff, u+fffd;
+}
+@font-face {
+  font-family: Figtree;
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(fonts/figtree-latin-ext.woff2) format("woff2");
+  unicode-range: u+0100-02ba, u+02bd-02c5, u+02c7-02cc, u+02ce-02d7, u+02dd-02ff, u+0304, u+0308,
+    u+0329, u+1d00-1dbf, u+1e00-1e9f, u+1ef2-1eff, u+2020, u+20a0-20ab, u+20ad-20c0, u+2113,
+    u+2c60-2c7f, u+a720-a7ff;
+}
+/* The app's metric-matched Arial stand-ins, so the swap does not reflow the page. */
+@font-face {
+  font-family: "Caprasimo Fallback";
+  src: local("Arial");
+  ascent-override: 79.59%;
+  descent-override: 19.86%;
+  line-gap-override: 0%;
+  size-adjust: 115.33%;
+}
+@font-face {
+  font-family: "Figtree Fallback";
+  src: local("Arial");
+  ascent-override: 94.32%;
+  descent-override: 24.82%;
+  line-gap-override: 0%;
+  size-adjust: 100.72%;
+}
+
+:root {
+  --font-heading: Caprasimo, "Caprasimo Fallback", Georgia, serif;
+  --font-body: Figtree, "Figtree Fallback", "Noto Sans", "Hiragino Sans", "Yu Gothic",
+    "Noto Sans CJK JP", "Noto Sans CJK SC", "Microsoft YaHei", "Noto Sans Devanagari", sans-serif;
+
+  /*
+   * Colours are ringonyan.shop's, from ringo-shop/src/app/globals.css: kawaii blue
+   * #9ed4ec / blue-deep #3a8fc0, green #6dbe45 / green-deep #4e9e2a, yellow #fff3a3,
+   * lavender #e8d5ff, border #d4eaf5, muted #7a9bae, ink #1a1a1a on white.
+   *
+   * Those are six flat colours, and this page's components want a ramp, so the steps
+   * between and beyond them are interpolated — every 100/200/…/900 below either is one of
+   * ringo's values (marked) or sits on the line between two of them. The two anchors the
+   * shop actually uses for blue are 400 and 600.
+   */
+  --color-bg: #ffffff; /* ringo: kawaii-bg */
+  --color-surface: #f7fcfe; /* faintest tint of the blue, for cards on white */
+  --color-text: #1a1a1a; /* ringo: kawaii-ink */
+  --color-accent: #3a8fc0; /* ringo: kawaii-blue-deep */
+  --color-divider: #c3e2f0;
+  --color-divider-soft: #d4eaf5; /* ringo: kawaii-border */
+
+  --color-accent-100: #eaf7fd;
+  --color-accent-200: #d4eaf5; /* ringo: kawaii-border */
+  --color-accent-300: #b8e0f1;
+  --color-accent-400: #9ed4ec; /* ringo: kawaii-blue */
+  --color-accent-500: #6ab6da;
+  --color-accent-600: #3a8fc0; /* ringo: kawaii-blue-deep */
+  --color-accent-700: #2f76a0;
+  --color-accent-800: #24597a;
+  --color-accent-900: #1a3f57;
+
+  /* The play button and the coin, where the shop uses green and yellow rather than blue. */
+  --color-green: #6dbe45; /* ringo: kawaii-green */
+  --color-green-deep: #4e9e2a; /* ringo: kawaii-green-deep */
+  --color-yellow: #fff3a3; /* ringo: kawaii-yellow */
+  --color-yellow-deep: #d9c04a; /* no deep yellow in the shop; same step as its other pairs */
+
+  --color-neutral-100: #f0f4f7; /* ringo: badge-muted background */
+  --color-neutral-200: #e3ecf2;
+  /* Not ringo's #7a9bae: that is 2.6:1 on its own badge background. Same hue, darkened
+     until small text passes AA. */
+  --color-neutral-800: #3f5e70;
+
+  /* Every fill here is a light one, so labels on them are ink, not white. White on the
+     green is 2.3:1 and on the blue 3.6:1; ink is 7.5:1 and 4.9:1. */
+  --on-accent: #1a1a1a;
+
+  --text-muted: rgba(26, 26, 26, 0.58);
+  --text-muted-strong: rgba(26, 26, 26, 0.62);
+  --text-faint: rgba(26, 26, 26, 0.5);
+
+  --space-1: 4.4px;
+  --space-2: 8.8px;
+  --space-3: 13.2px;
+  --space-4: 17.6px;
+  --space-6: 26.4px;
+  --space-8: 35.2px;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 28px;
+
+  --shadow-bar: 0 2px 8px rgba(58, 143, 192, 0.12);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-2);
+}
+h1 {
+  font-size: 46px;
+}
+h2 {
+  font-size: 27px;
+}
+h3 {
+  font-size: 17px;
+  letter-spacing: 0;
+}
+p {
+  margin: 0 0 var(--space-3);
+}
+a {
+  color: var(--color-accent-700);
+  text-underline-offset: 3px;
+}
+a:hover {
+  /* Darker on hover, not lighter: the 600 step is 3.6:1 on white and this is body-size text. */
+  color: var(--color-accent-800);
+}
+code {
+  font-family: var(--font-heading);
+  font-size: 0.92em;
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+::selection {
+  background: rgba(158, 212, 236, 0.55);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.tag-accent {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.tag-neutral {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+
+/* — top bar — */
+.topbar {
+  border-bottom: 1px solid var(--color-divider-soft);
+  background: #fff;
+}
+.topbar-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* The app's CSS-drawn `$` coin, at its nav size. */
+.coin {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  line-height: 1;
+  /* Yellow rather than the page's blue: it still has to read as a coin, and the shop's
+     kawaii-yellow is the one warm colour in that palette. */
+  color: var(--color-text);
+  background: linear-gradient(150deg, #fffbdc, var(--color-yellow));
+  box-shadow: 0 3px 0 var(--color-yellow-deep);
+  user-select: none;
+}
+.wordmark {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+
+/* — page — */
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-8);
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: var(--space-6);
+}
+/*
+ * The decorative circle from the app's login screen, recoloured to the shop's blue and now
+ * holding wormo. It no longer bleeds off-canvas the way the app's does: the artwork sits
+ * inside it, so anything cropped by the viewport edge would be cropping the drawing.
+ *
+ * Kept at z-index -1 all the same. It never reaches the text at these widths (see the
+ * padding-right below), but if a zoom level ever brings them together the words win.
+ */
+.hero-circle {
+  position: absolute;
+  z-index: -1;
+  right: 0;
+  top: -12px;
+  width: 320px;
+  height: 320px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f4fbff, #d9eef8 55%, var(--color-accent-300));
+  pointer-events: none;
+}
+.hero-circle img {
+  /* Portrait art in a circle: width is what has to be held back so the bubble still reads
+     as a ring around it. 70% of 320px is 224 wide by 277 tall (the drawing is 700x866),
+     which clears the 320px circle on both axes. */
+  width: 70%;
+  height: auto;
+  filter: drop-shadow(0 3px 6px rgba(26, 26, 26, 0.14));
+}
+/* Keep the copy clear of the bubble instead of letting it slide underneath. Below this
+   width the bubble is hidden (see the media query at the end), so the padding goes with it. */
+@media (min-width: 900px) {
+  .hero {
+    padding-right: 360px;
+  }
+}
+.hero h1 {
+  max-width: 15ch;
+  margin-bottom: var(--space-4);
+}
+.hero-body {
+  max-width: 60ch;
+  font-size: 16.5px;
+  color: var(--text-muted-strong);
+}
+
+.example {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 100%;
+  margin: var(--space-2) 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-bar);
+}
+.example-voice {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  color: var(--color-accent-800);
+  background: var(--color-accent-200);
+  padding: 2px 12px;
+  border-radius: 999px;
+}
+.example-text {
+  color: var(--text-muted-strong);
+}
+
+.hero-notes {
+  max-width: 66ch;
+  margin: 0;
+  padding-left: 1.15em;
+  color: var(--text-muted-strong);
+  font-size: 14.5px;
+}
+.hero-notes li {
+  margin-bottom: var(--space-1);
+}
+.hero-notes li::marker {
+  color: var(--color-accent-400);
+}
+
+/* — country sections — */
+/* The gap the toolbar used to hold open between the hero and the first country heading. */
+#catalogue {
+  margin-top: var(--space-8);
+}
+.country {
+  margin-bottom: var(--space-8);
+}
+.country-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-divider-soft);
+  margin-bottom: var(--space-4);
+}
+.country-head h2 {
+  margin: 0;
+}
+.flag {
+  font-size: 25px;
+  line-height: 1;
+  /* Emoji flags on a system without a colour flag font come out as two letters, which is
+     still readable — but keep the fallback stack explicit rather than leaving it to chance. */
+  font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+}
+
+.gender {
+  margin-bottom: var(--space-6);
+}
+.gender-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.gender-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-divider-soft);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: var(--space-3);
+}
+
+/* — voice card — */
+.card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+.card:hover {
+  border-color: var(--color-accent-300);
+  box-shadow: var(--shadow-bar);
+}
+.card.is-playing {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent-400);
+}
+
+.play {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  /* Green, because it is the primary action on the page and green is what the shop's
+     primary button uses. Playing turns it blue, so the state is a hue change, not a
+     shade of the same colour. */
+  color: var(--on-accent);
+  background: var(--color-green);
+  box-shadow: 0 2px 0 var(--color-green-deep);
+  transition: background-color 0.12s ease, transform 0.12s ease;
+}
+.play:hover {
+  background: #85cd61;
+}
+.play:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.play svg {
+  display: block;
+}
+.card.is-playing .play {
+  background: var(--color-accent-600);
+  color: var(--color-accent-100);
+  box-shadow: 0 2px 0 var(--color-accent-800);
+}
+
+.card-body {
+  min-width: 0;
+  flex: 1;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.voice-name {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+/* The id doubles as the copy button — it is the string you actually type in chat. */
+.voice-id {
+  font: inherit;
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  color: var(--color-accent-800);
+  background: var(--color-accent-200);
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 11px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.voice-id:hover {
+  background: var(--color-accent-300);
+}
+.voice-id.is-copied {
+  background: var(--color-accent-800);
+  color: var(--color-accent-100);
+}
+
+.line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted-strong);
+}
+.translation {
+  margin: var(--space-1) 0 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+/* Playback position, drawn along the bottom edge of the card. Width is set from JS on
+   timeupdate; the transition keeps it from stepping visibly between the ~4 Hz updates. */
+.progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 0;
+  background: var(--color-accent-600);
+  transition: width 0.2s linear;
+}
+
+.empty {
+  padding: var(--space-8) 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.footer {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6);
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-divider-soft);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+@media (max-width: 720px) {
+  h1 {
+    font-size: 34px;
+  }
+  .page {
+    padding: var(--space-6) var(--space-4);
+  }
+  .topbar-inner,
+  .footer {
+    padding-inline: var(--space-4);
+  }
+  .hero-circle {
+    display: none;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

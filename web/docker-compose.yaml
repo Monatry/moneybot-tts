@@ -1,0 +1,47 @@
+# Pinned so the compose project (and therefore the built image name) does not follow
+# the directory name. This lives in a repo now, and a checkout elsewhere would
+# otherwise be a different project with a different image.
+name: moneytts
+
+services:
+  moneytts:
+    build:
+      context: .
+      args:
+        # Baked into the bundle at build time — Next resolves basePath when it compiles.
+        # Changing this requires `--build`, not a restart, and it must stay in step with the
+        # location block in ../../nginx/templates/default.conf.template.
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/moneytts}
+        # The Twitch app to sign in as, from ./.env. Also build-time: it is public (implicit
+        # flow, no secret) and browser code needs it, so it is inlined into the bundle. `:?`
+        # for the same reason as TTS_BASE_URL below — a build with no client ID produces an
+        # app that can only fail at the sign-in button, so stop here instead.
+        NEXT_PUBLIC_TWITCH_CLIENT_ID: ${NEXT_PUBLIC_TWITCH_CLIENT_ID:?set it in web/.env — copy web/.env.example}
+    container_name: moneytts
+    restart: unless-stopped
+    environment:
+      # Both of these come from ./.env — see .env.example. Keeping the values out of this
+      # file means the tracked repo carries no deployment's hostname, and that `npm run dev`
+      # reads the same file Next loads anyway, so the two cannot drift.
+      #
+      # `:?` rather than a default: the app refuses to guess an upstream host rather than
+      # risk sending a streamer's chat somewhere unintended, so an unset value stops
+      # `docker compose up` with the message below instead of starting something misaimed.
+      # Read at request time, so a change needs a restart but not a rebuild, and it is not
+      # NEXT_PUBLIC_*, so it stays server-side.
+      TTS_BASE_URL: ${TTS_BASE_URL:?set it in web/.env — copy web/.env.example}
+    # Bound to loopback on purpose: the root nginx runs with network_mode host and reaches
+    # this over 127.0.0.1, so there is no reason to expose it on the LAN as well.
+    ports:
+      - "127.0.0.1:3100:3000"
+    healthcheck:
+      # busybox wget — the image has no curl. The path carries the prefix because the app
+      # serves nothing at the container's own root once basePath is set.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000${NEXT_PUBLIC_BASE_PATH:-/moneytts}"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # No volumes by design. Settings, per-chatter voices, the OAuth token and the avatar
+    # images all live in the streamer's own browser (localStorage / IndexedDB); the server
+    # only proxies the TTS stream and holds no state worth persisting.

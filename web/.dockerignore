@@ -1,0 +1,30 @@
+# The build context is copied wholesale before anything runs, so everything large and
+# rebuildable is excluded here. node_modules and .next in this directory came out of the
+# Windows upload — they are the wrong platform for the image and are rebuilt inside it.
+node_modules
+.next
+out
+build
+*.tsbuildinfo
+
+# The upload archive itself: half a gigabyte that would be sent to the daemon every build.
+*.tar
+
+# Reference material, not source. Already excluded from tsconfig and from Next's file
+# tracing; excluding it here keeps it out of the image entirely.
+design_handoff_moneybot_tts
+
+Dockerfile
+.dockerignore
+docker-compose.yaml
+.git
+.gitignore
+.claude
+CLAUDE.md
+README.md
+# Every .env, not just the .local ones. The Dockerfile's builder stage does `COPY . .`, so a
+# .env sitting here would be inside the build context and `next build` would load it, which
+# is both a config it should not be reading and a secret-shaped file in a layer. Runtime
+# config arrives from compose `environment:` and NEXT_PUBLIC_BASE_PATH from a build arg, so
+# nothing in the image needs these. .env.example is excluded too; it is documentation.
+.env*

@@ -1,0 +1,84 @@
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex: none;
+}
+.wrap[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px;
+  transition: background-color 0.15s ease;
+}
+
+.knob {
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+/* Design draws the setup rows at 46×27/21 and the dashboard source pills at 40×24/18. */
+.lg .track {
+  width: 46px;
+  height: 27px;
+}
+.lg .knob {
+  width: 21px;
+  height: 21px;
+}
+.lg.on .knob {
+  transform: translateX(19px);
+}
+
+.sm .track {
+  width: 40px;
+  height: 24px;
+}
+.sm .knob {
+  width: 18px;
+  height: 18px;
+}
+.sm.on .knob {
+  transform: translateX(16px);
+}
+
+.gold.on .track {
+  background: var(--color-accent-500);
+}
+.purple.on .track {
+  background: var(--color-accent-2-500);
+}
+.off .track {
+  background: #ddd7c9;
+}
+
+.input:focus-visible + .track {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

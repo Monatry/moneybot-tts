@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!--
+    The `$` coin mark from src/components/Coin.tsx, redrawn as a vector so it can be a favicon.
+    Same three parts and the same colours: the solid "stacked coin" shadow underneath, the gold
+    gradient disc, and the glyph. The `$` is a stroked path rather than <text> — a favicon is
+    rendered outside the document, so the Caprasimo webfont is not available to it.
+
+    It is drawn nearly full-bleed (the component leaves no padding of its own either) because at
+    16px anything smaller stops reading as a coin.
+  -->
+  <defs>
+    <!-- linear-gradient(150deg, #f0d888, #c8a02a) -->
+    <linearGradient id="coin" x1="0.25" y1="0.067" x2="0.75" y2="0.933">
+      <stop offset="0" stop-color="#f0d888" />
+      <stop offset="1" stop-color="#c8a02a" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="32" cy="35" r="29" fill="#a5811b" />
+  <circle cx="32" cy="29" r="29" fill="url(#coin)" />
+
+  <g fill="none" stroke="#5b450f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M40 22.5C40 18.9 36.4 17.5 32 17.5C27.6 17.5 24 18.9 24 22.5C24 26.1 27.6 27.5 32 29C36.4 30.5 40 31.9 40 35.5C40 39.1 36.4 40.5 32 40.5C27.6 40.5 24 39.1 24 35.5" />
+    <path d="M32 12.5V45.5" />
+  </g>
+</svg>

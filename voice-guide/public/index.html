@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monatry TTS voice selector</title>
+    <meta
+      name="description"
+      content="Listen to every voice the Monatry TTS bot can speak in, grouped by country and gender, and pick one by starting your message with its name in brackets."
+    />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <!--
+      The ?v= on each asset below is its content hash, written by tools/stamp-assets.py.
+      Run that after editing anything in public/ — do not hand-edit these values.
+
+      Cloudflare rewrites Cache-Control to max-age=14400 for static extensions, so the
+      `no-cache` nginx sends never reaches the browser. This document is never cached
+      (cf-cache-status: DYNAMIC), so the query string here is what decides which copy of the
+      script and stylesheet a visitor actually runs. Getting it wrong does not just show a
+      stale style: a browser can then pair this markup with an older app.js, and an old
+      script that expects markup which no longer exists throws before it can render anything.
+    -->
+    <link rel="stylesheet" href="styles.css?v=5de83e06" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <span class="brand">
+          <span class="coin" aria-hidden="true">$</span>
+          <span class="wordmark">Monatry TTS</span>
+        </span>
+        <span class="tag tag-neutral">Voice selector</span>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="hero">
+        <div class="hero-circle" aria-hidden="true">
+          <img src="wormo.png?v=b9a05c95" alt="" width="700" height="866" decoding="async" />
+        </div>
+        <h1>Pick a voice,<br />then say it in brackets.</h1>
+        <p class="hero-body">
+          Every voice below is one the bot can read your chat message in. Play a sample, find one
+          you like, and put its name in square brackets at the very start of your message:
+        </p>
+
+        <p class="example">
+          <span class="example-voice">[af_sky]</span>
+          <span class="example-text">Streamer is washed. My dead grandma could do this in her sleep.</span>
+        </p>
+
+        <ul class="hero-notes">
+          <li>The brackets have to come <strong>first</strong>: anything before them and the whole
+            thing is read out as ordinary text, brackets and all.</li>
+          <li>Type the name exactly as it appears on the card, for example
+            <code>bm_george</code> or <code>jf_nezumi</code>. Click one to copy it.</li>
+          <li>Leave the brackets off and you get your usual voice, so you only need this when you
+            want to switch.</li>
+        </ul>
+      </section>
+
+      <noscript>
+        <p class="empty">
+          This page needs JavaScript to list and play the samples. The files themselves are plain
+          wavs under <code>samples/</code> if you would rather grab them directly.
+        </p>
+      </noscript>
+
+      <div id="catalogue"></div>
+    </main>
+
+    <footer class="footer">
+      <span id="total">Kokoro voices · samples rendered at 24 kHz</span>
+      <span aria-hidden="true">·</span>
+      <!-- Deployment-specific: points at the author's own bot. Change or drop it on a fork. -->
+      <span>Part of <a href="https://private.woof-i-am-a.dog/moneytts">Monatry TTS</a></span>
+    </footer>
+
+    <script src="voices.js?v=2a7665e6"></script>
+    <script src="app.js?v=3ee018b5"></script>
+  </body>
+</html>

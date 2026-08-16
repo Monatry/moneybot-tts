@@ -1,0 +1,554 @@
+.screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.navNote {
+  font-size: 12.5px;
+  color: rgba(27, 24, 21, 0.5);
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.backLink:hover {
+  color: var(--color-accent-700);
+}
+
+.body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 480px;
+  min-height: 0;
+}
+
+.form {
+  padding: 32px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.lede {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--text-muted-strong);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.sectionNote {
+  font-size: 12.5px;
+  color: rgba(27, 24, 21, 0.5);
+}
+
+/* ── idle ────────────────────────────────────────────────────────────────── */
+
+.idleRow {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.idleTile {
+  width: 150px;
+  height: 150px;
+  flex: none;
+  border-radius: 26px;
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-300);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.idleImg {
+  max-width: 110px;
+  max-height: 100px;
+  object-fit: contain;
+}
+.idleCaption {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-accent-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropzone,
+.dropzoneOver {
+  flex: 1;
+  min-height: 150px;
+  border: 1.5px dashed rgba(27, 24, 21, 0.2);
+  border-radius: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--color-surface);
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+.dropzoneOver {
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
+}
+.dropTitle {
+  font-size: 14px;
+  font-weight: 700;
+}
+.dropHint {
+  font-size: 12.5px;
+  color: rgba(27, 24, 21, 0.5);
+}
+.dropBtn {
+  height: 36px;
+  background: #fff;
+  margin-top: 4px;
+}
+
+/* ── frames ──────────────────────────────────────────────────────────────── */
+
+.frameGrid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.frameTile {
+  width: 118px;
+  height: 118px;
+  border-radius: 22px;
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-300);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.frameImg {
+  max-width: 84px;
+  max-height: 84px;
+  object-fit: contain;
+}
+.frameIndex {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  font-size: 10.5px;
+  color: var(--color-accent-700);
+}
+.frameDelete {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  color: var(--color-danger);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+.frameMove {
+  position: absolute;
+  bottom: 6px;
+  display: flex;
+  gap: 6px;
+}
+.frameMove button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  color: var(--color-accent-800);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+}
+.frameMove button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.addTile,
+.addTileOver {
+  width: 118px;
+  height: 118px;
+  border-radius: 22px;
+  border: 1.5px dashed rgba(27, 24, 21, 0.2);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: rgba(27, 24, 21, 0.5);
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+.addTileOver {
+  border-color: var(--color-accent-500);
+  background: var(--color-accent-100);
+}
+
+/* ── speed ───────────────────────────────────────────────────────────────── */
+
+.speedPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: 26px;
+  padding: 20px 22px;
+}
+.speedHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.speedLabel {
+  font-weight: 700;
+  font-size: 14.5px;
+}
+.speedValue {
+  font-family: var(--font-heading);
+  font-size: 17px;
+}
+.speedRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.speedEnd {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.speedHint {
+  font-size: 12.5px;
+  color: rgba(27, 24, 21, 0.5);
+}
+/* The value readout plus the panel's own on/off switch. */
+.headRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A named slider row. The Slow–Fast pair either side of a slider only reads while a panel
+   has one of them; the bob has five, so each carries its own name and value instead. */
+.tuneRow {
+  display: grid;
+  grid-template-columns: 74px 1fr 62px;
+  align-items: center;
+  gap: 12px;
+}
+.tuneLabel {
+  font-size: 12.5px;
+  color: var(--text-muted-strong);
+}
+.tuneValue {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  text-align: right;
+  color: var(--color-accent-800);
+}
+
+/* ── background ──────────────────────────────────────────────────────────── */
+
+.bgPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider-soft);
+  border-radius: 26px;
+  padding: 20px 22px;
+}
+
+.bgRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* The native colour input is the picker; it is sized away and a swatch drawn over it, so
+   the control matches the rest of the screen instead of the OS default button. */
+.swatch {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid var(--color-divider-soft);
+  overflow: hidden;
+  cursor: pointer;
+  flex: none;
+}
+.swatch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+.swatchFill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.swatch[data-disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hexInput {
+  width: 116px;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid var(--color-divider-soft);
+  background: #fff;
+  padding: 0 14px;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-strong, inherit);
+}
+.hexInput:disabled {
+  opacity: 0.4;
+}
+
+.presets {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.preset,
+.presetOn {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(27, 24, 21, 0.18);
+  cursor: pointer;
+  padding: 0;
+}
+.presetOn {
+  border: 2px solid var(--color-accent-700);
+  box-shadow: 0 0 0 2px var(--color-accent-100);
+}
+
+.bgToggleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bgToggleText {
+  font-size: 13px;
+  color: var(--text-muted-strong);
+}
+
+.actions {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.saveBtn {
+  height: 46px;
+  padding-inline: 26px;
+  font-size: 15px;
+}
+.resetBtn {
+  height: 46px;
+  padding-inline: 20px;
+}
+.overlayUrl {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
+/* ── preview rail ────────────────────────────────────────────────────────── */
+
+.previewRail {
+  border-left: 1px solid var(--color-divider-soft);
+  background: linear-gradient(180deg, #fffcf2, #fdf7e2);
+  padding: 32px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.previewBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.previewLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.previewNote {
+  font-size: 12px;
+  color: rgba(27, 24, 21, 0.5);
+}
+
+.stage {
+  position: relative;
+  height: 200px;
+  border-radius: 26px;
+  background-color: #fff;
+  border: 1px solid var(--color-divider-soft);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  /* 18px checkerboard, to signal that transparency is preserved. */
+  background-image:
+    linear-gradient(45deg, #f8f6f0 25%, transparent 25%, transparent 75%, #f8f6f0 75%),
+    linear-gradient(45deg, #f8f6f0 25%, transparent 25%, transparent 75%, #f8f6f0 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 9px 9px;
+}
+/* The preview is the overlay at a smaller size: the same component, filling the tile the
+   way it fills a browser source, so a caption at 5% of the height lands in the same place
+   in both. */
+.stageFill {
+  position: absolute;
+  inset: 0;
+}
+
+.stageEmpty {
+  font-size: 12px;
+  color: rgba(27, 24, 21, 0.4);
+  font-style: italic;
+}
+
+/* ── drag handles ────────────────────────────────────────────────────────── */
+
+/* Wraps the stage so the handles can hang over its edges — the stage itself clips, or a
+   bobbing avatar would spill out of the tile. */
+.stageWrap {
+  position: relative;
+}
+
+.dragLayer {
+  position: absolute;
+  inset: 0;
+  /* Transparent to the pointer; only the handles take events. */
+  pointer-events: none;
+}
+
+.handle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent-700);
+  background: #fff;
+  color: var(--color-accent-800);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+  cursor: grab;
+  pointer-events: auto;
+  /* Without this a drag on a touch screen or trackpad scrolls the rail instead. */
+  touch-action: none;
+}
+.handle:active {
+  cursor: grabbing;
+}
+.handle:focus-visible {
+  outline: 2px solid var(--color-accent-700);
+  outline-offset: 2px;
+}
+.handleLabel,
+.handleLabelAbove {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 10px;
+  white-space: nowrap;
+  color: var(--color-accent-800);
+  pointer-events: none;
+}
+.handleLabel {
+  top: calc(100% + 3px);
+}
+.handleLabelAbove {
+  bottom: calc(100% + 3px);
+}
+
+.stageWave {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+}
+
+.testCard {
+  margin-top: auto;
+  background: #fff;
+  border-radius: 24px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--shadow-bar);
+}
+.testText {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--text-muted-strong);
+}
+.testBtn {
+  height: 40px;
+  padding-inline: 16px;
+}
+
+@media (max-width: 1100px) {
+  .body {
+    grid-template-columns: 1fr;
+  }
+  .previewRail {
+    border-left: 0;
+    border-top: 1px solid var(--color-divider-soft);
+  }
+}

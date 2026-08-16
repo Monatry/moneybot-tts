@@ -1,0 +1,13 @@
+.coin {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  line-height: 1;
+  user-select: none;
+}
+
+.bounce {
+  animation: mb-bounce 1.6s ease-in-out infinite;
+}

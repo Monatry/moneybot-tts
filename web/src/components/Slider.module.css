@@ -1,0 +1,60 @@
+.range {
+  flex: 1;
+  min-width: 0;
+  height: 22px; /* room for the knob; the visible track is painted at 8px below */
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.range:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* — track — */
+.range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, #efd582, #c8a02a) 0 / var(--fill) 100% no-repeat,
+    #f0e6cd;
+}
+.range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #f0e6cd;
+}
+.range::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #efd582, #c8a02a);
+}
+
+/* — knob — */
+.range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px; /* centres the 22px knob on the 8px track */
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--color-accent-500);
+  box-shadow: var(--shadow-knob);
+}
+.range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--color-accent-500);
+  box-shadow: var(--shadow-knob);
+}
+
+.range:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: 999px;
+}

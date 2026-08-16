@@ -1,0 +1,42 @@
+.wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.bar,
+.barActive {
+  flex: 1;
+  border-radius: 999px;
+  transform-origin: bottom;
+}
+
+.barActive {
+  animation: pulse 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    transform: scaleY(0.45);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.mini {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+}
+
+.miniBar,
+.miniBarActive {
+  width: 5px;
+  border-radius: 999px;
+  transform-origin: bottom;
+}
+.miniBarActive {
+  animation: pulse 0.55s ease-in-out infinite alternate;
+}

@@ -1,0 +1,30 @@
+# Pinned so the compose project (and therefore the built image name) does not follow
+# the directory name. This lives in a repo now, and a checkout elsewhere would
+# otherwise be a different project with a different image.
+name: tts
+
+services:
+  tts:
+    build: .
+    container_name: tts
+    restart: unless-stopped
+    ports:
+      - "8020:8080"
+    volumes:
+      # Model files (~350 MB), downloaded on first start by the entrypoint.
+      - ./models:/models
+    environment:
+      DEFAULT_VOICE: af_heart
+      DEFAULT_LANG: en-us
+      # Two requests synthesize in parallel; onnxruntime gets the whole box
+      # per inference. Measured on this 8-core host: 1.2s to first audio, and
+      # no worse than 4 threads with three requests in flight.
+      TTS_WORKERS: "2"
+      OMP_NUM_THREADS: "8"
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
