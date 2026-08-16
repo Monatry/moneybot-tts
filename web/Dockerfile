@@ -29,6 +29,19 @@ ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 ARG NEXT_PUBLIC_TWITCH_CLIENT_ID=""
 ENV NEXT_PUBLIC_TWITCH_CLIENT_ID=$NEXT_PUBLIC_TWITCH_CLIENT_ID
 
+# Which synthesiser the bundle is compiled against — "server" (the default: relay a Kokoro
+# instance of ../server through /api/tts/*) or "browser" (run Kokoro in the streamer's own
+# browser through kokoro-js). See src/lib/ttsEngine.ts. Build-time, like everything else
+# here: the two produce different bundles, and there is no runtime switch between them. The
+# two compose files in this directory build one image each.
+ARG NEXT_PUBLIC_TTS_ENGINE="server"
+ENV NEXT_PUBLIC_TTS_ENGINE=$NEXT_PUBLIC_TTS_ENGINE
+
+# Browser engine only: the Hugging Face repo the weights come from. Empty means the default
+# in ttsEngine.ts, which is the conversion kokoro-js is built against.
+ARG NEXT_PUBLIC_KOKORO_MODEL_ID=""
+ENV NEXT_PUBLIC_KOKORO_MODEL_ID=$NEXT_PUBLIC_KOKORO_MODEL_ID
+
 ENV NEXT_TELEMETRY_DISABLED=1
 # This stage needs outbound network: next/font/google downloads Caprasimo and Figtree and
 # self-hosts them, and the build fails rather than falling back if it cannot reach Google.

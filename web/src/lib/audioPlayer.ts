@@ -3,10 +3,12 @@
 /**
  * Web Audio replacement for the desktop app's NAudio `AudioPlaybackService`.
  *
- * The upstream contract is the same: raw 24 kHz / 16-bit signed little-endian / mono PCM
- * arriving in chunks, played as it arrives. NAudio had a `BufferedWaveProvider` doing the
- * buffering; here each chunk becomes an AudioBuffer scheduled on the context clock, back to
- * back, so the browser's own resampler handles the 24 kHz → device-rate conversion.
+ * The upstream contract is the same: 24 kHz mono audio arriving in chunks, played as it
+ * arrives — as raw 16-bit signed little-endian bytes from the server engine, or as float
+ * samples straight from the model on the browser engine (see `push`). NAudio had a
+ * `BufferedWaveProvider` doing the buffering; here each chunk becomes an AudioBuffer
+ * scheduled on the context clock, back to back, so the browser's own resampler handles the
+ * 24 kHz → device-rate conversion.
  *
  * Everything is scheduled a short lead ahead of `currentTime`. That lead is the whole
  * reason playback survives a network hiccup: the audio already handed to the device keeps
@@ -133,10 +135,28 @@ export class PcmPlayer {
     this.playing = true;
   }
 
-  /** Appends one network chunk. */
-  push(bytes: Uint8Array) {
-    if (!this.playing || bytes.length === 0) return;
+  /**
+   * Appends one chunk from whichever engine is synthesising.
+   *
+   * Both shapes end up in the same place, and the difference is entirely upstream: the
+   * server engine relays raw 16-bit PCM off a socket, arriving in network-sized pieces that
+   * split samples down the middle, while the browser engine hands back a whole sentence of
+   * float samples that already are what an AudioBuffer holds. Converting one into the other
+   * before this point would mean either quantising the local model's output for no reason
+   * or paying for a copy the network path does not need.
+   */
+  push(chunk: Uint8Array | Float32Array) {
+    if (!this.playing || chunk.length === 0) return;
 
+    const samples = chunk instanceof Float32Array ? chunk : this.decodeInt16(chunk);
+    if (samples.length === 0) return;
+    this.pendingSamples.push(samples);
+    this.pendingLength += samples.length;
+    if (this.pendingLength >= MIN_FLUSH_SAMPLES) this.flush();
+  }
+
+  /** Raw 16-bit LE bytes to samples, carrying a split sample across the chunk boundary. */
+  private decodeInt16(bytes: Uint8Array): Float32Array {
     // Re-join a sample that a chunk boundary split in half. Without this, one byte of
     // every straddling chunk is lost and everything after it is shifted by a byte — which
     // sounds like white noise, not like a glitch.
@@ -164,10 +184,7 @@ export class PcmPlayer {
       this.oddByte = (bytes.length & 1) === 1 ? bytes[bytes.length - 1] : null;
     }
 
-    if (samples.length === 0) return;
-    this.pendingSamples.push(samples);
-    this.pendingLength += samples.length;
-    if (this.pendingLength >= MIN_FLUSH_SAMPLES) this.flush();
+    return samples;
   }
 
   /** Schedules whatever has accumulated, however short. Called when the stream ends. */

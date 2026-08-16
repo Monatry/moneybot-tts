@@ -1,0 +1,116 @@
+/* The browser engine's load bar and backend controls. Same tokens as every other screen —
+   nothing here is styled independently of globals.css. */
+
+.inline,
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inline {
+  padding: 14px 16px;
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-200);
+  border-radius: var(--radius-md);
+}
+
+/* The dashboard strip: full width, same footprint as the status banner it sits beside. */
+.banner {
+  margin: 0 var(--space-6) var(--space-3);
+  padding: 12px 18px;
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-200);
+  border-radius: var(--radius-md);
+}
+
+.headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.percent {
+  font-family: var(--font-heading);
+  font-size: 14px;
+}
+
+.track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(27, 24, 21, 0.1);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent-500);
+  /* Files finish one at a time, so the aggregate steps rather than glides; the transition
+     is what turns those steps back into a bar that looks like it is moving. */
+  transition: width 240ms ease-out;
+}
+
+.caption {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.errorInline,
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--color-danger);
+}
+
+.errorInline {
+  padding: 12px 14px;
+  border: 1px solid rgba(140, 29, 29, 0.25);
+  border-radius: var(--radius-md);
+}
+
+.errorBanner {
+  margin: 0 var(--space-6) var(--space-3);
+  padding: 12px 18px;
+  border: 1px solid rgba(140, 29, 29, 0.25);
+  border-radius: var(--radius-md);
+}
+
+.errorDetail {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: rgba(140, 29, 29, 0.75);
+  word-break: break-word;
+}
+
+.lede {
+  margin: -2px 0 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.controlRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.select {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.backendNote {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.fallbackNote {
+  color: var(--color-sage-text);
+}

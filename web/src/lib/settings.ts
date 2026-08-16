@@ -37,9 +37,45 @@ export interface Settings {
     masterVolume: number;
   };
   avatar: AvatarSettings;
+  /** Browser engine only — ignored, but still stored, by a server-engine build. */
+  localTts: LocalTtsSettings;
   /** Whether a chatter may repin their own voice with a `[voice]` prefix. */
   allowChatterVoiceOverride: boolean;
   setupComplete: boolean;
+}
+
+/**
+ * How the in-browser Kokoro model runs. Only the browser engine reads these
+ * (`NEXT_PUBLIC_TTS_ENGINE=browser`); a server-engine build keeps them untouched so that
+ * switching builds does not lose the choice.
+ *
+ * Both default to `auto`, which the worker resolves as WebGPU at fp32 where the browser can
+ * honour it and WASM at q8 everywhere else. The override exists because "can honour it" is
+ * not something a feature test settles — a driver that accepts the adapter and then fails
+ * to run the graph is common enough that a streamer needs to be able to say "just use the
+ * CPU" and stop being surprised on stream. The worker falls back on its own too, but only
+ * after paying for the discovery once per load.
+ */
+export interface LocalTtsSettings {
+  device: "auto" | "wasm" | "webgpu";
+  dtype: "auto" | "fp32" | "fp16" | "q8" | "q4" | "q4f16";
+}
+
+export const LOCAL_TTS_DEVICES = ["auto", "wasm", "webgpu"] as const;
+export const LOCAL_TTS_DTYPES = ["auto", "fp32", "fp16", "q8", "q4", "q4f16"] as const;
+
+export const DEFAULT_LOCAL_TTS: LocalTtsSettings = { device: "auto", dtype: "auto" };
+
+/** Anything not on the list falls back to `auto` rather than reaching the worker, where an
+ *  unknown dtype is a download of a file the hub does not have. */
+function normalizeLocalTts(value: Partial<LocalTtsSettings> | undefined): LocalTtsSettings {
+  const device = LOCAL_TTS_DEVICES.includes(value?.device as never)
+    ? (value!.device as LocalTtsSettings["device"])
+    : DEFAULT_LOCAL_TTS.device;
+  const dtype = LOCAL_TTS_DTYPES.includes(value?.dtype as never)
+    ? (value!.dtype as LocalTtsSettings["dtype"])
+    : DEFAULT_LOCAL_TTS.dtype;
+  return { device, dtype };
 }
 
 /**
@@ -204,6 +240,7 @@ export const DEFAULT_SETTINGS: Settings = {
     masterVolume: 0.72,
   },
   avatar: DEFAULT_AVATAR,
+  localTts: DEFAULT_LOCAL_TTS,
   allowChatterVoiceOverride: true,
   setupComplete: false,
 };
@@ -228,6 +265,7 @@ export function normalize(s: Settings): Settings {
       masterVolume: clamp(s.audio.masterVolume, 0, 1),
     },
     avatar: normalizeAvatar(s.avatar),
+    localTts: normalizeLocalTts(s.localTts),
   };
 }
 
@@ -310,6 +348,7 @@ function load(): Settings {
       // `normalizeAvatar` does its own one-level-deep merge, so a blob written before the
       // crossfade/caption/bob settings existed comes back with all three defaulted off.
       avatar: normalizeAvatar(parsed.avatar),
+      localTts: normalizeLocalTts(parsed.localTts),
       allowChatterVoiceOverride:
         parsed.allowChatterVoiceOverride ?? DEFAULT_SETTINGS.allowChatterVoiceOverride,
       setupComplete: parsed.setupComplete ?? DEFAULT_SETTINGS.setupComplete,

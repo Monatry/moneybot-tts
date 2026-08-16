@@ -6,7 +6,16 @@ import { postAvatarMessage } from "./avatarStore";
 import { cleanChatText, splitVoicePrefix } from "./chatText";
 import { getViewerCount } from "./helix";
 import { settingsStore, type Settings } from "./settings";
-import { fetchVoices, estimateSeconds, AccessDeniedError } from "./ttsClient";
+import {
+  fetchVoices,
+  estimateSeconds,
+  getEngineStatus,
+  resetEngine,
+  subscribeEngineStatus,
+  type EngineStatus,
+  type TtsFailure,
+} from "./ttsClient";
+import { TTS_ENGINE, type TtsEngine } from "./ttsEngine";
 import { TtsQueue } from "./ttsQueue";
 import { TwitchEventSubClient } from "./twitchEventSub";
 import { TwitchIrcClient } from "./twitchIrc";
@@ -36,6 +45,15 @@ export interface BotState {
   voices: string[];
   /** Set when the voice list could not be loaded. Message + detail, per AccessDeniedError. */
   voicesError: { message: string; detail: string } | null;
+  /** Which synthesiser this build was compiled against. Constant for the session. */
+  engine: TtsEngine;
+  /**
+   * How synthesis itself is doing. On the browser engine this is the model download and
+   * warm-up, which is tens of seconds on a cold cache and the one thing a streamer must be
+   * able to watch — an app that looks idle while 86 MB arrives reads as broken. Permanently
+   * `unused` on the server engine, where readiness is a property of a box elsewhere.
+   */
+  engineStatus: EngineStatus;
   bitsReadToday: number;
   viewerCount: number | null;
   isSpeaking: boolean;
@@ -53,6 +71,8 @@ const INITIAL: BotState = {
   chat: [],
   voices: [],
   voicesError: null,
+  engine: TTS_ENGINE,
+  engineStatus: { phase: "unused", percent: 0, detail: "", backend: null },
   bitsReadToday: 0,
   viewerCount: null,
   isSpeaking: false,
@@ -151,6 +171,11 @@ class Bot {
       onRedemption: (e) => this.onRedemption(e),
       onStatus: (message) => this.patch({ statusMessage: message }),
     });
+
+    // Never unsubscribed, deliberately: this object is the module singleton and outlives
+    // every component that reads it, so there is no point at which dropping the listener
+    // would be correct. A no-op on the server engine.
+    subscribeEngineStatus((engineStatus) => this.patch({ engineStatus }));
   }
 
   /* ── store plumbing ─────────────────────────────────────────────────────── */
@@ -158,7 +183,11 @@ class Bot {
   getSnapshot = (): BotState => {
     if (!this.hydrated && typeof window !== "undefined") {
       this.hydrated = true;
-      this.state = { ...this.state, bitsReadToday: loadBitsToday() };
+      // The engine may already have been asked for voices by a screen that mounted before
+      // this listener existed, so take its current reading rather than waiting for the next
+      // change — a bar that only appears at the next percent tick misses a warm cache
+      // entirely.
+      this.state = { ...this.state, bitsReadToday: loadBitsToday(), engineStatus: getEngineStatus() };
     }
     return this.state;
   };
@@ -234,7 +263,7 @@ class Bot {
           this.patch({ voices, voicesError: null });
           return voices;
         } catch (err) {
-          const e = err as AccessDeniedError;
+          const e = err as TtsFailure;
           this.patch({ voicesError: { message: e.message, detail: e.detail ?? "" } });
           return [];
         } finally {
@@ -245,6 +274,20 @@ class Bot {
       })();
     }
     return this.voicesLoad;
+  }
+
+  /**
+   * Throws the loaded model away and loads it again on the current settings. Browser engine
+   * only, and only the device/precision controls call it: an ONNX inference session is
+   * built around one backend and cannot be re-targeted, so changing either means starting
+   * over. Weights already in the browser's cache are not re-downloaded, so the cost is the
+   * warm-up, not the 86 MB.
+   */
+  async reloadEngine(): Promise<string[]> {
+    resetEngine();
+    this.voicesLoad = null;
+    this.patch({ voices: [], voicesError: null });
+    return this.ensureVoices();
   }
 
   /* ── settings changes ───────────────────────────────────────────────────── */
@@ -434,7 +477,9 @@ class Bot {
   }
 
   private onFailed(req: TtsRequest, err: Error) {
-    const detail = err instanceof AccessDeniedError ? err.detail : err.message;
+    // Both engines' errors carry `detail` with the real cause under a generic `message`;
+    // anything else that reaches here has only the one string worth showing.
+    const detail = (err as TtsFailure).detail ?? err.message;
     this.patch({
       nowPlaying: null,
       queue: this.queue.snapshot(),

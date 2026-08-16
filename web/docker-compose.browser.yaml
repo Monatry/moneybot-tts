@@ -1,0 +1,65 @@
+# Moneybot TTS, browser engine — the same app compiled against kokoro-js instead of the
+# Kokoro service in ../server. Kokoro runs in the streamer's own browser, in a worker; this
+# container serves the bundle and nothing else.
+#
+# A second stack rather than a second mode of the first one, because the two are different
+# deployments: this one has no upstream TTS host to configure and no whitelist to sit
+# behind, so it lives on the public hostname, while ./docker-compose.yaml keeps serving the
+# server-backed build on the private one. Bringing this up does not touch that container —
+# different project, different image, different port.
+#
+#   docker compose -f docker-compose.browser.yaml up -d --build
+#
+# Pinned project name, same reason as the other file: the image name must not follow the
+# directory, and it must not collide with `moneytts`.
+name: moneytts-browser
+
+services:
+  moneytts:
+    build:
+      context: .
+      args:
+        # Same prefix as the server-engine stack, because it is served at the same path on a
+        # *different host* — woof-i-am-a.dog/moneytts rather than
+        # private.woof-i-am-a.dog/moneytts. Baked in at build time; changing it needs
+        # `--build` and a matching edit to ../../nginx/templates/default.conf.template.
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/moneytts}
+
+        # The whole point of this stack. See src/lib/ttsEngine.ts.
+        NEXT_PUBLIC_TTS_ENGINE: browser
+
+        # The Twitch app to sign in as, from ./.env — shared with the other stack, since it
+        # is the same application. Note that Twitch compares redirect_uri as a raw string,
+        # so this app must have BOTH hosts' /moneytts/auth/callback registered as OAuth
+        # Redirect URLs; the private host's registration does not cover the public one.
+        NEXT_PUBLIC_TWITCH_CLIENT_ID: ${NEXT_PUBLIC_TWITCH_CLIENT_ID:?set it in web/.env — copy web/.env.example}
+
+        # Optional override for the Hugging Face repo the weights come from. Unset uses the
+        # default in ttsEngine.ts.
+        NEXT_PUBLIC_KOKORO_MODEL_ID: ${NEXT_PUBLIC_KOKORO_MODEL_ID:-}
+    container_name: moneytts-browser
+    restart: unless-stopped
+
+    # No `environment:` at all, and specifically no TTS_BASE_URL: this build never calls
+    # /api/tts/*, so there is no upstream host and nothing for the container to know. That
+    # absence is the deployment difference in one line.
+
+    # Loopback, like the other stack — the root nginx runs with network_mode host and
+    # reaches it here. 3101 so the two can run side by side.
+    ports:
+      - "127.0.0.1:3101:3000"
+
+    healthcheck:
+      # busybox wget; the image has no curl. The path carries the prefix because the app
+      # serves nothing at the container's own root once basePath is set.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000${NEXT_PUBLIC_BASE_PATH:-/moneytts}"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+    # No volumes, for a stronger reason than the other stack has: this build's server does
+    # not even proxy audio. Settings, per-chatter voices, the OAuth token, the avatar images
+    # and now the model weights themselves all live in the streamer's browser — the weights
+    # in Cache Storage, put there by the browser's own fetch from the Hugging Face CDN, which
+    # never touches this container.

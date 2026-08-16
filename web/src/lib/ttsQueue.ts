@@ -1,7 +1,7 @@
 "use client";
 
 import type { PcmPlayer } from "./audioPlayer";
-import { AccessDeniedError, openPcmStream } from "./ttsClient";
+import { openPcmStream } from "./ttsClient";
 import { resolveVoiceFor, setUserVoice } from "./userVoices";
 import type { TtsRequest } from "./types";
 
@@ -213,8 +213,6 @@ export class TtsQueue {
         // the "now speaking" card would sit on it for the whole pacing gap. A *stopped*
         // one is different — the runtime is shutting down and there is nothing to advance.
         if (!this.stopped) this.handlers.onCompleted(req);
-      } else if (error instanceof AccessDeniedError) {
-        this.handlers.onFailed(req, error);
       } else {
         this.handlers.onFailed(req, error);
       }

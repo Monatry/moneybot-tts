@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { DeviceSelect } from "@/components/DeviceSelect";
+import { LocalModelControls, ModelProgress } from "@/components/LocalModel";
 import { Segmented } from "@/components/Segmented";
 import { Slider } from "@/components/Slider";
 import { Stepper } from "@/components/Stepper";
@@ -252,8 +253,15 @@ export function TriggersAudio({
               />
             </div>
 
+            <LocalModelControls />
+
             <div className={styles.testCard}>
               <Waveform active={bot.isSpeaking} />
+              {/* Renders only while the in-browser model is loading or after it failed, and
+                  never at all on a server-engine build. It sits above the Test button
+                  because that button is disabled until the voice list exists, and this is
+                  the only thing on the screen that says why. */}
+              <ModelProgress status={bot.engineStatus} />
               <div className={styles.testRow}>
                 <span className={styles.testCaption}>“{TEST_LINE}”</span>
                 <button

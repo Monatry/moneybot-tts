@@ -17,6 +17,7 @@ design_handoff_moneybot_tts
 Dockerfile
 .dockerignore
 docker-compose.yaml
+docker-compose.browser.yaml
 .git
 .gitignore
 .claude

@@ -21,10 +21,33 @@ const nextConfig: NextConfig = {
   // Ships a self-contained server plus a pruned node_modules, so the runtime image does not
   // need the dependency tree or a package install. See the Dockerfile's runner stage.
   output: "standalone",
-  // The design handoff folder is reference material, not source. Keeping it inside the
-  // project root is convenient, but it must never be type-checked or bundled.
   outputFileTracingExcludes: {
-    "*": ["./design_handoff_moneybot_tts/**/*"],
+    "*": [
+      // The design handoff folder is reference material, not source. Keeping it inside the
+      // project root is convenient, but it must never be type-checked or bundled.
+      "./design_handoff_moneybot_tts/**/*",
+      // The browser engine's dependency tree, which exists only to be bundled into the
+      // worker chunk under .next/static and shipped to the browser. Nothing server-side
+      // imports any of it. Left in, the tracer follows kokoro-js → @huggingface/transformers
+      // → onnxruntime-node and copies a few hundred megabytes of native CPU/GPU binaries —
+      // for an architecture nothing in this image runs — into the standalone output.
+      "./node_modules/onnxruntime-node/**/*",
+      "./node_modules/sharp/**/*",
+    ],
+  },
+  webpack: (config) => {
+    // Same story one layer down: @huggingface/transformers resolves to its prebuilt *web*
+    // bundle in every compilation here (its "node" export condition is only picked for a
+    // Node target), but its package graph still names the Node runtime and sharp. Aliasing
+    // them away means a stray import cannot drag either into a bundle — and turns what
+    // would be a confusing "module not found: onnxruntime-node" at build time into nothing
+    // at all.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "onnxruntime-node$": false,
+      sharp$: false,
+    };
+    return config;
   },
 };
 
