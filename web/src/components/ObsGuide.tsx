@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Copy, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { obsOverlayUrl, withBasePath } from "@/lib/basePath";
+import { X } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { withBasePath } from "@/lib/basePath";
+import { OverlayUrlRow } from "./OverlayUrlRow";
 import styles from "./ObsGuide.module.css";
 
 /**
@@ -20,10 +21,6 @@ import styles from "./ObsGuide.module.css";
  */
 export function ObsGuide({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
-  // Read after mount rather than during render: `window` does not exist in the server render,
-  // and this dialog is a child of a page that has one.
-  const [url, setUrl] = useState("");
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -31,25 +28,6 @@ export function ObsGuide({ open, onClose }: { open: boolean; onClose: () => void
     if (open && !el.open) el.showModal();
     if (!open && el.open) el.close();
   }, [open]);
-
-  useEffect(() => setUrl(obsOverlayUrl()), []);
-
-  // The tick is a confirmation, not a state — it says the click landed, so it expires.
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1600);
-    return () => clearTimeout(t);
-  }, [copied]);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-    } catch {
-      // Clipboard access can be refused (no permission, an insecure origin). The URL is
-      // selectable text either way, so there is nothing to report — just no tick.
-    }
-  }
 
   if (!open) return null;
 
@@ -155,18 +133,7 @@ export function ObsGuide({ open, onClose }: { open: boolean; onClose: () => void
               <strong>Shutdown source when not visible</strong> unticked — that setting is the
               one thing that can still stop it.
             </p>
-            <div className={styles.urlRow}>
-              <code className={styles.url}>{url}</code>
-              <button
-                type="button"
-                className={styles.copy}
-                onClick={() => void copy()}
-                disabled={!url}
-              >
-                {copied ? <Check size={14} strokeWidth={3} /> : <Copy size={14} strokeWidth={2.5} />}
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
+            <OverlayUrlRow className={styles.urlRow} />
           </li>
 
           <li>

@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { AvatarStage } from "@/components/AvatarStage";
+import {
+  getRunnerServerStatus,
+  getRunnerStatus,
+  startAvatarRunner,
+  subscribeRunnerStatus,
+} from "@/lib/avatarRunner";
 import {
   cacheAvatar,
   createImageReceiver,
@@ -40,6 +46,12 @@ import styles from "./overlay.module.css";
  *
  * Neither case is detected up front: it subscribes to both transports and paints whatever
  * arrives.
+ *
+ * **Inside OBS it is also the client.** `lib/avatarRunner.ts` starts the bot here when no
+ * dashboard is running, which is what makes TTS come up with OBS rather than with a browser
+ * window somebody has to remember to open. That is also the one thing this route draws which
+ * it was not given: a status line, so a graphic that is quietly not working says so on stream
+ * instead of looking exactly like a quiet chat.
  */
 export default function AvatarOverlay() {
   const [idle, setIdle] = useState<StoredImage | null>(null);
@@ -50,6 +62,20 @@ export default function AvatarOverlay() {
 
   const idleUrl = useObjectUrl(idle);
   const frameUrls = useObjectUrls(frames);
+  const status = useSyncExternalStore(
+    subscribeRunnerStatus,
+    getRunnerStatus,
+    getRunnerServerStatus,
+  );
+
+  // Deliberately no cleanup, for the same reason `bot.ts` and the OBS bridge have none: this
+  // is a module singleton whose lifetime is the page, not the component. A browser source only
+  // unmounts this by navigating away or reloading, both of which take the whole page with it —
+  // and tearing the bot down on React's development double-invoke would be a real stop/start
+  // of two websockets. Starting is idempotent, and a no-op where it is not wanted.
+  useEffect(() => {
+    startAvatarRunner();
+  }, []);
 
   // OBS composites whatever the page paints; a white body would be an opaque white box over
   // the scene. The overlay is the one route that must not inherit the app's page colour, so
@@ -95,6 +121,8 @@ export default function AvatarOverlay() {
         // Normalized again on arrival: the message crosses a window boundary, so this is the
         // one path into these values that has not been through the settings store.
         setAvatar(normalizeAvatar(m.avatar));
+      } else if (m.type === "setup" || m.type === "bot-alive") {
+        // The runner's half of the protocol — it holds its own subscription for these.
       } else if (m.type === "config-changed") {
         // Only worth acting on where the dashboard and this window share a store. Inside OBS
         // the store is this overlay's own cache, so re-reading it would repaint the images
@@ -113,6 +141,15 @@ export default function AvatarOverlay() {
 
   return (
     <main className={styles.overlay} style={{ background: avatar.background }}>
+      {status && (
+        <p
+          className={`${styles.status} ${styles[status.tone]} ${
+            status.transient ? styles.fading : ""
+          }`}
+        >
+          {status.text}
+        </p>
+      )}
       <AvatarStage
         idleUrl={idleUrl}
         frameUrls={frameUrls}

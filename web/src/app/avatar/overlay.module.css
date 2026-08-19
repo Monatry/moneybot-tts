@@ -4,3 +4,65 @@
   background: transparent;
   overflow: hidden;
 }
+
+/*
+ * The runner's status line.
+ *
+ * This is the one thing the overlay draws that nobody configured, and the exception to the
+ * rule that it paints nothing it was not given — see the note on `startAvatarRunner`. It is
+ * meant to be read by the streamer *and* by chat: an overlay that cannot reach the TTS server
+ * looks exactly like a stream nobody is cheering in, so it fails visibly instead of quietly.
+ *
+ * Sized in `vh` rather than from a measured element: on this route the stage is the viewport,
+ * so a fraction of viewport height is already a fraction of the stage — the ResizeObserver in
+ * AvatarStage exists because the config screen renders it into a 200 px tile, and nothing
+ * renders *this* anywhere but here.
+ */
+.status {
+  position: absolute;
+  top: 2.5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  max-width: 92%;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 2.6vh;
+  line-height: 1.3;
+  /* Same treatment as the caption: a stroke under the fill survives any scene behind it. */
+  -webkit-text-stroke: 0.09em #000;
+  paint-order: stroke fill;
+  text-shadow: 0 0.06em 0.14em rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+.info {
+  color: #ffffff;
+}
+
+.ok {
+  color: #7df5a5;
+}
+
+.error {
+  color: #ff8f6b;
+}
+
+/*
+ * The success line takes itself away: it holds still long enough to actually be read, then goes
+ * slowly enough that it reads as leaving rather than as a glitch. The delay plus the fade has to
+ * finish inside the window the runner keeps the message for (OK_LINGER_MS in
+ * lib/avatarRunner.ts), or the element is removed mid-animation and the line vanishes instead of
+ * fading.
+ */
+.fading {
+  animation: statusFade 3000ms ease 5000ms forwards;
+}
+
+@keyframes statusFade {
+  to {
+    opacity: 0;
+  }
+}

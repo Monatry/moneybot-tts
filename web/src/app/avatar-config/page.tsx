@@ -7,6 +7,7 @@ import { AppNav } from "@/components/AppNav";
 import { AvatarStage } from "@/components/AvatarStage";
 import { Coin } from "@/components/Coin";
 import { ObsGuide } from "@/components/ObsGuide";
+import { OverlayUrlRow } from "@/components/OverlayUrlRow";
 import { MiniWaveform } from "@/components/Waveform";
 import { Slider } from "@/components/Slider";
 import { Toggle } from "@/components/Toggle";
@@ -21,7 +22,6 @@ import {
   saveIdle,
   type StoredImage,
 } from "@/lib/avatarStore";
-import { appOrigin, withBasePath } from "@/lib/basePath";
 import { getBot, useBot } from "@/lib/bot";
 import { DEFAULT_OBS_URL, type ObsBridgeStatus } from "@/lib/obsBridge";
 import { pushAvatarToObs, useObsBridge } from "@/lib/useObsBridge";
@@ -85,7 +85,6 @@ export default function AvatarConfigPage() {
   const [reordering, setReordering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [overlayUrl, setOverlayUrl] = useState(withBasePath("/avatar"));
   // The OBS connection fields are the one thing on this screen that is *not* a draft waiting
   // for Save — they configure a live socket, and a URL you cannot see the result of typing
   // is a URL you cannot debug. They are held locally only so that the socket reconnects when
@@ -104,9 +103,6 @@ export default function AvatarConfigPage() {
       setIdle(idle);
       setFrames(frames);
     });
-    // The URL a streamer pastes into OBS, so it has to be the absolute one *including* the
-    // base path — `basePath` does not reach a string built by hand.
-    setOverlayUrl(`${appOrigin()}/avatar`);
   }, []);
 
   useEffect(() => setObsUrlDraft(settings.obs.url), [settings.obs.url]);
@@ -330,9 +326,14 @@ export default function AvatarConfigPage() {
               </>
             )}
 
+            {/* The URL a browser source is pointed at, copyable, in the panel the streamer is
+                already in — the same component the guide's step 4 uses, so neither can show a
+                URL the other does not. */}
+            <OverlayUrlRow />
+
             <div className={styles.speedHint}>
               {settings.obs.enabled
-                ? "Add a Browser source in OBS pointing at the overlay URL at the bottom of this page, then leave it be — OBS renders it off-screen, so it keeps animating whether or not anything is visible. Saving on this screen sends the images across; the bridge only carries them one way, so a browser source added later needs Send avatar now."
+                ? "Add a Browser source in OBS pointing at this URL. A source added later needs Send avatar now — the bridge only carries the images one way."
                 : "A browser source in OBS is its own browser: it cannot see the images or the settings stored here, which is why they have to be sent. Switch this on and the avatar goes to OBS directly, with none of the throttling a hidden or covered browser window is subject to."}
             </div>
           </section>
@@ -813,7 +814,6 @@ export default function AvatarConfigPage() {
             <button type="button" className={`btn btn-secondary ${styles.resetBtn}`} onClick={reset}>
               Reset to default
             </button>
-            <span className={styles.overlayUrl}>Overlay URL: {overlayUrl}</span>
           </div>
         </main>
 

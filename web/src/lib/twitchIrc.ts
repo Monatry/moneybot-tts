@@ -29,6 +29,13 @@ export interface IrcMessage {
   text: string;
   bits: number;
   id: string;
+  /**
+   * The channel-point reward this message was redeemed with, or "" for an ordinary message.
+   * A reward that takes text input posts that text to chat as well as raising an EventSub
+   * redemption, so this is the only thing marking the PRIVMSG as the second half of a pair.
+   * See `Bot.onChatMessage`.
+   */
+  customRewardId: string;
 }
 
 export interface IrcHandlers {
@@ -227,6 +234,7 @@ export class TwitchIrcClient {
           text,
           bits,
           id: line.tags["id"] || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          customRewardId: line.tags["custom-reward-id"] || "",
         });
         return;
       }

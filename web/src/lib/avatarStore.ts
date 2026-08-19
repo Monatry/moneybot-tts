@@ -15,7 +15,7 @@
  */
 
 import { OBS_EVENT_NAME, emitToObs, waitForObsDrain } from "./obsBridge";
-import type { AvatarSettings } from "./settings";
+import type { AvatarSettings, Settings } from "./settings";
 
 const DB_NAME = "moneybot-avatar";
 const DB_VERSION = 1;
@@ -171,6 +171,31 @@ export type AvatarMessage =
    * the dashboard window, so every field it paints has to arrive here.
    */
   | { type: "settings"; avatar: AvatarSettings }
+  /**
+   * The *whole* settings object, for an overlay that has to run the bot itself rather than
+   * paint what a dashboard tells it (lib/avatarRunner.ts). `settings` above carries only
+   * what the overlay draws; a runner also needs the channel, the token, the triggers and the
+   * audio preferences, and inside OBS there is no shared localStorage to read them from.
+   *
+   * Small enough to go as one message — the entire object is a few hundred bytes next to a
+   * 4 MB image, so none of the chunking below applies.
+   *
+   * Note what this puts on the wire: `emit_event` is a broadcast to every browser source in
+   * OBS, so the Twitch token in here is readable by any other page the streamer has loaded
+   * there. That is a knowing trade for feature parity — without it a runner reads chat
+   * anonymously and loses redeems. See CLAUDE.md, "The overlay as a client".
+   */
+  | { type: "setup"; settings: Settings }
+  /**
+   * "A client here is running the bot." Posted every few seconds by whichever page has the
+   * runtime started, so an overlay in *another browser profile* can tell whether it needs to
+   * take over — see lib/runnerLease.ts for why a Web Lock cannot answer that one case.
+   *
+   * `id` identifies the sending page, not the user: a BroadcastChannel delivers to every
+   * other channel object of the same name including ones in the sending context, so without
+   * it a runner would hear its own heartbeat and stand down forever.
+   */
+  | { type: "bot-alive"; id: string }
   /** Whether samples are reaching the device, plus the line they belong to (for the caption). */
   | { type: "speaking"; speaking: boolean; text: string | null }
   /**

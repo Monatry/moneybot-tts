@@ -40,9 +40,20 @@ services:
     container_name: moneytts-browser
     restart: unless-stopped
 
-    # No `environment:` at all, and specifically no TTS_BASE_URL: this build never calls
-    # /api/tts/*, so there is no upstream host and nothing for the container to know. That
-    # absence is the deployment difference in one line.
+    # TTS_BASE_URL, which this stack did *not* need until the overlay became a client of its
+    # own. Everything a visitor's browser synthesises still happens in that browser — but a
+    # /avatar running as an OBS browser source cannot: CEF has no WebGPU and its WASM
+    # throughput is far too low for a chat message, so that one page forces the server path
+    # (src/lib/avatarRunner.ts) and POSTs to /api/tts/* like the private build does.
+    #
+    # Which means this container now relays the Kokoro service on a *public* URL, where the
+    # private stack's copy sits behind Cloudflare Access. That is a deliberate, accepted
+    # trade — see "Accepted tradeoffs" in ./CLAUDE.md — not an oversight. The `:?` is here for
+    # the same reason as the other stack's: guessing an upstream is how a streamer's chat ends
+    # up posted to somebody else's box, so unset has to stop `up` rather than start a
+    # misaimed container.
+    environment:
+      TTS_BASE_URL: ${TTS_BASE_URL:?set it in web/.env — copy web/.env.example}
 
     # Loopback, like the other stack — the root nginx runs with network_mode host and
     # reaches it here. 3101 so the two can run side by side.

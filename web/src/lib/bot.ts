@@ -15,7 +15,7 @@ import {
   type EngineStatus,
   type TtsFailure,
 } from "./ttsClient";
-import { TTS_ENGINE, type TtsEngine } from "./ttsEngine";
+import { TTS_ENGINE, activeEngine, type TtsEngine } from "./ttsEngine";
 import { TtsQueue } from "./ttsQueue";
 import { TwitchEventSubClient } from "./twitchEventSub";
 import { TwitchIrcClient } from "./twitchIrc";
@@ -30,7 +30,30 @@ import type { ChatEntry, ConnectionStatus, NowPlaying, TtsRequest } from "./type
  * it through `useBot()`; nothing else in the tree owns any of this.
  */
 
+/**
+ * Identifies this page in the `bot-alive` heartbeat. Per page load, not per user: its whole
+ * job is letting a receiver tell "somebody else is running the bot" from its own echo, since
+ * a BroadcastChannel delivers to sibling channel objects in the sending context too.
+ */
+export const CLIENT_ID = Math.random().toString(36).slice(2, 10);
+
+/**
+ * How often a started bot announces itself. Only an overlay in another browser profile reads
+ * these (lib/avatarRunner.ts) — where they share one, the Web Lock in lib/runnerLease.ts
+ * settles it and this is ignored. Frequent enough that a takeover after a dashboard closes
+ * feels immediate rather than like a stall, cheap enough to leave running all stream.
+ */
+const HEARTBEAT_MS = 3000;
+
 const MAX_CHAT_ENTRIES = 200;
+
+/**
+ * How long a queued redemption stays matchable against its own chat echo. Twitch delivers the
+ * two within about a second of each other; the margin is for an IRC reconnect landing between
+ * them. Long enough to catch the pair, short enough that a viewer redeeming the same words
+ * again later is a new reading rather than a suppressed one.
+ */
+const REDEEM_ECHO_WINDOW_MS = 15_000;
 
 /** Same cap the desktop dashboard had: the whole list re-renders on every change. */
 export const MAX_QUEUE_ROWS = 50;
@@ -90,6 +113,10 @@ function colorFor(user: string): string {
   return NAME_COLORS[Math.abs(hash) % NAME_COLORS.length];
 }
 
+function redeemEchoKey(user: string, body: string): string {
+  return `${user.toLowerCase()}|${body}`;
+}
+
 /**
  * Queue ids have to be unique because the per-row ✕ removes by id — a timestamp alone is
  * not, and four messages enqueued in the same millisecond would all vanish on one click.
@@ -134,11 +161,14 @@ class Bot {
 
   private ticker: number | null = null;
   private viewerTimer: number | null = null;
+  private heartbeat: number | null = null;
   private voicesLoad: Promise<string[]> | null = null;
   private started = false;
   private lastBroadcastSpeaking = false;
   private lastBroadcastText: string | null = null;
   private hydrated = false;
+  /** Recently queued redemptions, by chatter and text. See `consumeRedeemEcho`. */
+  private redeemEchoes = new Map<string, number[]>();
 
   constructor() {
     this.queue = new TtsQueue(
@@ -214,7 +244,11 @@ class Bot {
   async start(): Promise<void> {
     const settings = settingsStore.get();
     this.started = true;
-    this.patch({ status: "connecting" });
+    // Read here rather than in `INITIAL`: a page that overrides the engine for itself (the
+    // overlay, forcing "server" — see lib/ttsEngine.ts) does so after this module is imported,
+    // so the constant folded into `INITIAL` can be the wrong one by the time anything asks.
+    this.patch({ status: "connecting", engine: activeEngine() });
+    this.startHeartbeat();
 
     await this.ensureVoices();
 
@@ -241,6 +275,10 @@ class Bot {
     if (this.viewerTimer !== null) {
       clearInterval(this.viewerTimer);
       this.viewerTimer = null;
+    }
+    if (this.heartbeat !== null) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
     }
     this.setSpeakingBroadcast(false, null);
     this.patch({ status: "offline", nowPlaying: null, isSpeaking: false });
@@ -351,6 +389,52 @@ class Bot {
 
   /* ── inbound events ─────────────────────────────────────────────────────── */
 
+  /**
+   * A channel-point reward that takes text input arrives **twice**: once over EventSub as a
+   * redemption, and once over IRC as an ordinary PRIVMSG carrying `custom-reward-id`. With
+   * both triggers on that is one redeem read out loud twice, which is what these two methods
+   * are for.
+   *
+   * They are paired on the chatter and the cleaned text because that is all the two halves
+   * share — EventSub names the reward, IRC only carries its id, and neither carries the
+   * other's. Only a message tagged with a reward id is ever matched, so ordinary chat is
+   * untouched, including a chatter who repeats themselves.
+   *
+   * A mark is written when a half is *queued*, not when it arrives, and matching consumes it.
+   * That keeps the two cases where only one half speaks working — chat off, or a redeem whose
+   * reward name does not match, where the message must still be read as plain chat — and lets
+   * a viewer who redeems the same words twice hear both.
+   */
+  private markRedeemQueued(user: string, body: string) {
+    const now = Date.now();
+    // Swept here rather than on a timer: the map only ever holds redemption-sized traffic,
+    // and an unconsumed mark (one half spoke, the other never came) has nothing to clear it.
+    for (const [key, marks] of this.redeemEchoes) {
+      const live = marks.filter((t) => now - t < REDEEM_ECHO_WINDOW_MS);
+      if (live.length === 0) this.redeemEchoes.delete(key);
+      else this.redeemEchoes.set(key, live);
+    }
+    const key = redeemEchoKey(user, body);
+    this.redeemEchoes.set(key, [...(this.redeemEchoes.get(key) ?? []), now]);
+  }
+
+  /** True when the other half of this redemption is already in the queue. Consumes the mark. */
+  private consumeRedeemEcho(user: string, body: string): boolean {
+    const key = redeemEchoKey(user, body);
+    const now = Date.now();
+    const marks = (this.redeemEchoes.get(key) ?? []).filter(
+      (t) => now - t < REDEEM_ECHO_WINDOW_MS,
+    );
+    if (marks.length === 0) {
+      this.redeemEchoes.delete(key);
+      return false;
+    }
+    marks.shift();
+    if (marks.length === 0) this.redeemEchoes.delete(key);
+    else this.redeemEchoes.set(key, marks);
+    return true;
+  }
+
   private onChatMessage(msg: {
     user: string;
     displayName: string;
@@ -358,6 +442,7 @@ class Bot {
     text: string;
     bits: number;
     id: string;
+    customRewardId: string;
   }) {
     const settings = settingsStore.get();
 
@@ -397,6 +482,13 @@ class Bot {
     if (!settings.triggers.chat) return;
     // Nothing speakable survived — an emoji-only message.
     if (body.length === 0) return;
+
+    // Tagged with a reward id, so this is a redeem's chat echo. If the redemption itself is
+    // already queued this is its second half — see markRedeemQueued.
+    if (msg.customRewardId) {
+      if (this.consumeRedeemEcho(msg.user, body)) return;
+      this.markRedeemQueued(msg.user, body);
+    }
 
     let text = body;
     let voiceOverride: string | undefined;
@@ -444,6 +536,14 @@ class Bot {
     // An unset reward name matches nothing rather than everything: one redeem drives the
     // queue, and the alternative would read every redeem on the channel out loud.
     if (!wanted || wanted.toLowerCase() !== e.rewardTitle.toLowerCase()) return;
+
+    // A reward that takes text input also posts it to chat, so this redemption may already be
+    // queued from the IRC side. Checked here rather than above so that a redeem this trigger
+    // does not want leaves the mark alone.
+    if (input.length > 0) {
+      if (this.consumeRedeemEcho(e.user, input)) return;
+      this.markRedeemQueued(e.user, input);
+    }
 
     let text = input.length === 0 ? e.displayName : input;
     // Same as chat: the redeem's input box is where a viewer types, so the `[voice]` prefix
@@ -545,6 +645,23 @@ class Bot {
         }
       }
     }, 100);
+  }
+
+  /**
+   * Announces that this page is running the bot, for an overlay that cannot share a Web Lock
+   * with it — see lib/runnerLease.ts for which case that is.
+   *
+   * Deliberately its own interval rather than a line inside `startTicker`: that one
+   * self-cancels the moment the queue goes quiet, which is exactly when an overlay would
+   * wrongly conclude the dashboard had gone away and start speaking over it. And it lives on
+   * the singleton rather than in a dashboard effect so that walking to /avatar-config and back
+   * does not look, for a few seconds, like the dashboard closing.
+   */
+  private startHeartbeat() {
+    if (this.heartbeat !== null) return;
+    const beat = () => postAvatarMessage({ type: "bot-alive", id: CLIENT_ID });
+    beat();
+    this.heartbeat = window.setInterval(beat, HEARTBEAT_MS);
   }
 
   /**

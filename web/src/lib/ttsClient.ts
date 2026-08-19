@@ -3,9 +3,9 @@
 /**
  * The app's one door to synthesis, and the seam between the two engines.
  *
- * Which one is behind it is decided at build time by `NEXT_PUBLIC_TTS_ENGINE`
- * (lib/ttsEngine.ts) and nothing above this file knows the difference — `ttsQueue` reads
- * chunks off a reader either way:
+ * Which one is behind it is decided by `NEXT_PUBLIC_TTS_ENGINE` at build time, or by
+ * `forceEngine` for a page that has to differ (lib/ttsEngine.ts). Nothing above this file
+ * knows which it got — `ttsQueue` reads chunks off a reader either way:
  *
  *   "server"  — POST to this app's own /api/tts/*, which relays a Kokoro instance of
  *               ../server. That server sends no CORS headers, so a browser fetch to it
@@ -21,7 +21,7 @@
 
 import { withBasePath } from "./basePath";
 import * as localTts from "./kokoro/localTts";
-import { IS_BROWSER_ENGINE } from "./ttsEngine";
+import { activeEngine } from "./ttsEngine";
 
 /**
  * Mirror of the server's AccessDeniedError. `message` is always the same generic line;
@@ -62,12 +62,12 @@ export interface EngineStatus {
 const UNUSED: EngineStatus = { phase: "unused", percent: 0, detail: "", backend: null };
 
 export function getEngineStatus(): EngineStatus {
-  return IS_BROWSER_ENGINE ? localTts.getStatus() : UNUSED;
+  return activeEngine() === "browser" ? localTts.getStatus() : UNUSED;
 }
 
 /** No-op on the server engine, so callers need no branch of their own. */
 export function subscribeEngineStatus(listener: (status: EngineStatus) => void): () => void {
-  if (!IS_BROWSER_ENGINE) return () => {};
+  if (activeEngine() !== "browser") return () => {};
   return localTts.subscribeStatus(listener);
 }
 
@@ -77,7 +77,7 @@ export function subscribeEngineStatus(listener: (status: EngineStatus) => void):
  * session cannot be re-targeted once it exists.
  */
 export function resetEngine() {
-  if (IS_BROWSER_ENGINE) localTts.reset();
+  if (activeEngine() === "browser") localTts.reset();
 }
 
 /* ── the two calls that matter ───────────────────────────────────────────────────────── */
@@ -92,7 +92,7 @@ async function toAccessDenied(res: Response, fallback: string): Promise<AccessDe
 }
 
 export async function fetchVoices(signal?: AbortSignal): Promise<string[]> {
-  if (IS_BROWSER_ENGINE) {
+  if (activeEngine() === "browser") {
     // Loads the model as a side effect — the voice list is a property of the weights, and
     // there is nothing to ask before they are here. Callers show `subscribeEngineStatus`
     // while this is outstanding; it is tens of seconds on a cold cache.
@@ -128,7 +128,7 @@ export function openPcmStream(
   speed: number,
   signal?: AbortSignal,
 ): Promise<ReadableStreamDefaultReader<Uint8Array | Float32Array>> {
-  if (IS_BROWSER_ENGINE) return localTts.openPcmStream(text, voice, speed, signal);
+  if (activeEngine() === "browser") return localTts.openPcmStream(text, voice, speed, signal);
   return openServerPcmStream(text, voice, speed, signal);
 }
 

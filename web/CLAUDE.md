@@ -15,17 +15,23 @@ identical between them:
 
 | | `server` (default) | `browser` |
 |---|---|---|
-| Synthesised by | a Kokoro instance of `../server`, relayed through `/api/tts/*` | `kokoro-js` in the streamer's own browser, in a worker |
-| Needs | `TTS_BASE_URL`, a reachable box | nothing but the Twitch client ID |
-| Voices | all 54 the server carries | **the 28 English ones only** — see below |
+| Synthesised by | a Kokoro instance of `../server`, relayed through `/api/tts/*` | `kokoro-js` in the streamer's own browser, in a worker — **except on `/avatar`**, see below |
+| Needs | `TTS_BASE_URL`, a reachable box | `TTS_BASE_URL` as well, for `/avatar` alone |
+| Voices | all 54 the server carries | **the 28 English ones only**, except on `/avatar` — see below |
 | Stack | `docker-compose.yaml` → `moneytts` :3100 | `docker-compose.browser.yaml` → `moneytts-browser` :3101 |
 | Deployed at | `private.woof-i-am-a.dog/moneytts`, behind Cloudflare Access | `woof-i-am-a.dog/moneytts`, public |
 
 Two builds rather than a runtime toggle because the choice *is* the deployment: the server
 build has an upstream that answers to whoever can reach it, which is what the Access gate in
-front of it is for, and the browser build has no upstream at all, so the only thing an
-unknown visitor can spend is their own CPU. A runtime switch would mean shipping a container
-half-configured for whichever half is off.
+front of it is for, and the browser build's pages spend nothing but the visitor's own CPU. A
+runtime switch would mean shipping a container half-configured for whichever half is off.
+
+**There is one runtime exception, and it is one page.** `/avatar` running as an OBS browser
+source calls `forceEngine("server")` on itself, because CEF has no WebGPU and its WASM
+throughput is far too low to synthesise a chat message in time. So on the browser build that
+route — and only that route — behaves like the server build: it needs `TTS_BASE_URL`, it gets
+all 54 voices, and it never loads kokoro-js at all. See "The overlay as a client" below,
+including what that costs.
 
 The server's `../../CLAUDE.md` describes the surrounding docker-compose collection and the nginx
 reverse proxy this app is served behind — read it before touching deployment.
@@ -62,7 +68,7 @@ anything that has to actually execute.
 
 ```
                                          ┌─ server engine ─→ /api/tts/* ─→ ../server
-TwitchIrcClient ─┐                       │
+TwitchIrcClient ─┐                       │      (and /avatar, on either build)
                  ├─→ Bot ─→ TtsQueue ─→ ttsClient
 TwitchEventSub ──┘   │                   │
                      │                   └─ browser engine ─→ kokoro worker (kokoro-js)
@@ -72,10 +78,17 @@ TwitchEventSub ──┘   │                   │
                      │                   PcmPlayer (Web Audio) ─→ output device
                      │                        └─→ BroadcastChannel ─→ /avatar overlay window
                      └─→ chat log, stats
+
+The same stack, twice over, and only one of them may run at a time:
+
+  /dashboard ─→ Bot ─┐
+                     ├─ one Web Lock + one heartbeat ─→ exactly one client speaks
+  /avatar    ─→ Bot ─┘   (runnerLease.ts / avatarRunner.ts)
 ```
 
-Almost everything is client-side. On the browser engine, *everything* is: the server's one
-job is proxying the TTS server, and that build has no TTS server.
+Almost everything is client-side. On the browser engine nearly everything is: the server's
+one job is proxying the TTS server, and the only page on that build which needs it is
+`/avatar`.
 
 - **`src/lib/bot.ts` is a module-level singleton, not React state**, and must stay that way.
   It has to outlive the component tree — moving between `/dashboard` and `/avatar-config`
@@ -122,6 +135,11 @@ job is proxying the TTS server, and that build has no TTS server.
   prefixes do nothing on this build, and `/tts-guide` (which lists all 54) over-promises for
   it. Chatters pinned to a retired id are silently re-rolled, which `userVoices.ts` already
   handled for the server case.
+  **Not true of `/avatar` on this build**, which synthesises server-side and therefore has all
+  54 — so a `[jf_alpha]` prefix works when the overlay is the client and does nothing when the
+  dashboard is. Accepted rather than papered over: the overlay is the one that runs during a
+  stream. Note `moneybot.uservoices.v1` is per-profile anyway, so the two keep separate
+  assignment maps regardless.
 - **Weights come from the Hugging Face CDN, not from this container**, into the browser's
   Cache Storage — once per browser, ~86 MB at q8. The ORT wasm binary likewise comes from
   jsdelivr (transformers.js' default `wasmPaths`). Self-hosting either was considered and
@@ -143,7 +161,8 @@ job is proxying the TTS server, and that build has no TTS server.
 
 ### Why only the TTS server is proxied
 
-Server engine only; the browser engine proxies nothing at all.
+Mostly server engine. On the browser build every page but `/avatar` proxies nothing at all;
+`/avatar` uses the same two routes as the server build, for the reason above.
 
 The TTS server (`../server`) sends no `Access-Control-Allow-Origin` on any host, so a browser
 fetch is blocked before it is sent — hence `/api/tts/*`. Twitch's `oauth2/validate`,
@@ -187,7 +206,12 @@ preview is what a streamer places the caption and the bob anchor by, so anything
 has to be drawn by the other.
 
 - **With no images, the overlay draws nothing.** No logo, no placeholder — it sits in a live
-  scene, and a placeholder there is a bug the streamer finds on stream.
+  scene, and a placeholder there is a bug the streamer finds on stream. The **one** exception
+  is the runner's status line, and it is deliberate: when the overlay is the client, a failure
+  is invisible otherwise — a broken TTS graphic looks exactly like a chat nobody is cheering
+  in. So it fails loudly, on stream, and only a success line is transient. It is rendered by
+  `avatar/page.tsx` as a sibling of `AvatarStage`, never inside it, so the shared composition
+  the config screen previews stays exactly what a viewer sees in normal operation.
 - Every size it draws is a **fraction of the stage's height** (caption size, bob rise), so a
   200 px preview tile and a 1080p browser source compose identically. The caption's font size
   needs the measured height, which is the one `ResizeObserver` in the component.
@@ -224,6 +248,66 @@ has to be drawn by the other.
   `finished`, and the roll lands on `playbackRate`: the shape is written once and only its
   tempo varies, and every roll starts from rest where a change is invisible. `finished`
   rejects on cancel, so the chain has to swallow that or unmounting throws.
+
+### The overlay as a client
+
+`src/lib/avatarRunner.ts` — `/avatar` runs the whole bot itself when no dashboard is running.
+
+The problem it solves is small and was the only manual step left: the runtime starts nowhere
+but `/dashboard` (there is no Start button — it autostarts on load), so every stream began with
+opening a browser and leaving a tab open. The overlay is already in OBS, so making *it* the
+client means TTS comes up with OBS and a streamer who set this up months ago changes nothing.
+
+- **It only volunteers inside OBS**, or with `?run=1` on the URL, which is how it is tested in
+  a normal browser. An overlay in a browser window stays the passive display it always was —
+  both to leave that flow alone and because a browser source is the one place a page may start
+  an AudioContext with no user gesture (obs-browser relaxes the autoplay policy). `?run=0`
+  forces passive.
+- **The setup travels over the bridge and is then persisted.** The `setup` message carries the
+  whole `Settings` object — the avatar alone is not enough for a client, which needs the
+  channel, the token and the triggers — and the runner writes it into its own `settingsStore`,
+  i.e. CEF's `localStorage`. That is what lets a restarted OBS read chat before any dashboard
+  reconnects; the bridge is one-way, so an overlay that could not remember its setup could
+  never ask for it again. Ignored outside OBS, where the store is already the real one.
+  `useObsBridge` also re-pushes `setup` whenever settings change, because the screens that
+  edit them (`/setup`) are not the screens that talk to OBS.
+- **Exactly one client may speak, and two mechanisms enforce it** because the question spans
+  two scopes. `src/lib/runnerLease.ts` holds a Web Lock named `moneybot.runner`: a real mutex,
+  released by the browser the instant its holder dies, so there is no timeout to tune and no
+  window where two pages both think they are the runner. Every client claims it, dashboard
+  included — `claimDashboardRole()` steals it, because a dashboard is the deliberate client and
+  should win instantly. That also fixes something older: two dashboard tabs used to be two IRC
+  connections and two EventSub sessions, i.e. everything spoken twice, with nothing to stop it.
+- **A lock cannot cross a browser profile**, and OBS's CEF is one. That single pair — an OBS
+  overlay and a dashboard in the streamer's desktop browser — is what the `bot-alive` heartbeat
+  is for and the only thing it is for. It is posted from `bot.ts` every 3 s while started, from
+  the singleton rather than a dashboard effect so that walking to `/avatar-config` and back does
+  not look like the dashboard closing, and *not* on the existing ticker, which self-cancels when
+  the queue goes quiet — precisely when an overlay would wrongly conclude it was alone. It carries
+  a per-page-load `id` because a BroadcastChannel
+  delivers to sibling channel objects in the sending context, so a runner would otherwise hear
+  its own heartbeat and stand down forever.
+- **Two timeouts, not one, and conflating them cost ten seconds of every stream.** Having heard
+  a beat, the question is "has it stopped", and the answer wants to be slow — `YIELD_TIMEOUT_MS`
+  is 10 s, because taking over wrongly means two clients on a live stream. Having heard *nothing*
+  the question is only "is anybody there", and the bound is one heartbeat interval plus margin
+  (`STARTUP_GRACE_MS`, 4 s), because a dashboard that is already running beats every 3 s whatever
+  its queue is doing. Nothing else is being waited for — in particular not the bridge's
+  connect-and-push, which delivers images and says nothing about who the client is. Volunteering
+  early is also the cheaper error: a dashboard that turns up a moment later says so.
+- **A takeover needs a configuration, and that is what prevents a spurious one.** A first-ever
+  run inside OBS has no channel, so it waits rather than racing the window between OBS's
+  WebSocket server coming up and the dashboard's `SETTLE_MS` push landing.
+- **Yielding lets the line in flight finish** (capped), rather than cutting a cheer off
+  mid-word. A dashboard needs several seconds to load voices and open its sockets after it
+  starts announcing itself, so in practice this costs no overlap at all.
+- **The audio watchdog is not optional.** A suspended AudioContext does not fail: `drain()`
+  retries the resume forever, so the queue wedges on message one in silence and `isSpeaking`
+  stays false, which looks like a message that never started. If something is playing into a
+  context that is not running for 5 s, the status line says so.
+- The runner's own `speaking` messages reach the overlay's existing subscription over
+  BroadcastChannel — a *sibling* channel object receives what this context posted — so the
+  avatar animates through the same path it always did, with no new wiring.
 
 ### The OBS bridge
 
@@ -320,6 +404,7 @@ Nothing above those two functions knows a bridge exists.
 | Bits read today | `localStorage` `moneybot.bitsToday.v1`, keyed by date |
 | Avatar images | IndexedDB `moneybot-avatar` (up to 4 MB each; would blow the localStorage budget) |
 | Avatar images, again | the same store in **OBS's** CEF profile, written by the overlay from what the bridge pushed. A cache, not a source of truth — `cacheAvatar` writes it without the config-changed ping, which in that profile would only come back to the overlay that just wrote it |
+| Settings, again | `moneybot.settings.v1` in **OBS's** CEF profile, written by `avatarRunner` from the pushed `setup`. The runner's own source of truth, and what lets a restarted OBS read chat with no dashboard up — the bridge is one-way, so it could not ask for it again |
 | Kokoro weights (browser engine) | Cache Storage, written by transformers.js — not ours, not cleared by "clear settings", and the reason a reload is fast after the first one |
 
 `settings.ts` merges stored blobs **one level deep**, not with a flat spread — an older blob
@@ -356,6 +441,14 @@ Behaviour worth not breaking:
 - The IRC username is the **token owner's login**, not the channel being watched.
 - EventSub tears the socket down before every reconnect. A second live websocket is a second
   session with its own subscription, and every redemption gets spoken twice.
+- **A reward that takes text input arrives twice**, and that is Twitch, not a bug here: once as
+  an EventSub redemption and once as an ordinary PRIVMSG tagged `custom-reward-id`. With the
+  chat and redeem triggers both on, that was one redeem read out loud twice. `bot.ts` pairs the
+  halves on chatter + cleaned text — all they share, since EventSub names the reward and IRC
+  only carries its id — and only for a message wearing that tag, so ordinary chat is untouched.
+  The mark is written when a half is **queued**, not when it arrives, which is what keeps a
+  redeem the reward-name filter rejects readable as plain chat. The chat column still shows
+  both, deliberately: one entry names the reward, and the panel mirrors Twitch.
 
 ### Conventions carried from the desktop app
 
@@ -513,8 +606,10 @@ are baked in at build time, so `--build` is not optional and `restart` does noth
 - In the example deployment the private host sits behind **Cloudflare Access**, so the
   server-engine app is gated by an Access login on top of everything else. Requests from the
   house IP bypass it, which makes it easy to forget when testing locally. The public host is
-  **not** behind Access, which is the point of putting the browser build there — it has no
-  upstream to protect.
+  **not** behind Access — which used to mean the browser build had no upstream to protect, and
+  no longer does: `/avatar` synthesises server-side, so **the browser stack now needs
+  `TTS_BASE_URL` too** and the public host has its own `/moneytts/api/tts/` block relaying the
+  same Kokoro instance, ungated. Deliberate; see below.
 - The Twitch developer console must list
   `https://<host>/moneytts/auth/callback` as an OAuth Redirect URL for every host it is served
   from, in
@@ -524,4 +619,26 @@ are baked in at build time, so `--build` is not optional and `restart` does noth
   a `redirect_mismatch` at the sign-in button.
 - The Docker build needs network access: `next/font/google` fetches Caprasimo and Figtree at
   build time.
+
+## Accepted tradeoffs
+
+Three things about "The overlay as a client" are known costs that were chosen, not oversights.
+Recorded here so nobody spends an afternoon discovering them and calling them bugs, and so the
+person who eventually wants to undo one knows what they are undoing.
+
+- **The public host relays the Kokoro box, unauthenticated.** `/moneytts/api/tts/speak` on the
+  public host will synthesise for anybody who posts to it. There is no whitelist anywhere in
+  either repo — `AccessDeniedError`'s "You are not whitelisted" is a vestige of the desktop app
+  and every failure wears it — so the only gate this ever had was the Access login in front of
+  the *private* host, and `/avatar` cannot go through one: it is a bare CEF with no way to log
+  in, which is why `obsOverlayUrl()` strips `private.` in the first place. The audience is a
+  handful of friends, the app is not advertised, and someone finding and using it would be
+  welcome rather than alarming. If the box ever starts hurting, the tap is the nginx block.
+- **The Twitch token is broadcast to every browser source in OBS.** `emit_event` is a
+  broadcast, so the `setup` message — token included — is delivered to every page OBS is
+  rendering, and a third-party widget could listen for `moneybot.avatar`. The alternative was
+  pushing no token, which costs channel-point redeems and the viewer count and leaves chat and
+  cheers working anonymously through `justinfan`. Parity won.
+- **`/avatar` and `/dashboard` disagree about voices on this build** — 54 against 28. See the
+  note under "The browser engine".
 </content>
