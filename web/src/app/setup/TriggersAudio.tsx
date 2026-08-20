@@ -9,6 +9,7 @@ import { Segmented } from "@/components/Segmented";
 import { Slider } from "@/components/Slider";
 import { Stepper } from "@/components/Stepper";
 import { Toggle } from "@/components/Toggle";
+import { VoicePool, VoicePoolEngineNote } from "@/components/VoicePool";
 import { Waveform } from "@/components/Waveform";
 import { getBot, useBot } from "@/lib/bot";
 import { getCustomRewards, type CustomReward } from "@/lib/helix";
@@ -282,6 +283,15 @@ export function TriggersAudio({
             </div>
           </section>
         </div>
+
+        {/* Full width, below the two columns rather than inside one: it is a list of up to
+            54 chips, and the panel it needs is wider than either column. The list is baked
+            into the bundle (lib/voiceCatalogue.ts), so it renders whether or not the engine
+            has answered yet — unlike the Test audio button above. */}
+        <section className={`${styles.panel} ${styles.voicePanel}`}>
+          <VoicePool />
+          <VoicePoolEngineNote />
+        </section>
 
         <div className={styles.actions}>
           <button type="button" className={`btn btn-primary ${styles.primaryCta}`} onClick={finish}>

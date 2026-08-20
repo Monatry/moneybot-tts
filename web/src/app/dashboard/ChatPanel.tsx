@@ -9,8 +9,8 @@ import styles from "./dashboard.module.css";
  * the queue is not reading still belongs here.
  *
  * There is no composer. The design draws one, but this build deliberately never sends as
- * the streamer: it reads chat and nothing else, which is also what the login screen
- * promises ("it never posts as you").
+ * the streamer: it reads chat and nothing else, which is also what the sign-in flow
+ * promises.
  *
  * Auto-scroll follows the bottom and gives up the moment the streamer scrolls away, which
  * is the only way to read back through a fast chat.

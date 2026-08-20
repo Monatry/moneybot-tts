@@ -42,6 +42,13 @@ ENV NEXT_PUBLIC_TTS_ENGINE=$NEXT_PUBLIC_TTS_ENGINE
 ARG NEXT_PUBLIC_KOKORO_MODEL_ID=""
 ENV NEXT_PUBLIC_KOKORO_MODEL_ID=$NEXT_PUBLIC_KOKORO_MODEL_ID
 
+# Where the setup screen's "Hear them all" link points: a voice guide, i.e. this repo's
+# ../voice-guide served somewhere. Optional and empty by default — there is no sensible
+# guess, so an unset value renders no link rather than one at somebody else's hostname.
+# Build-time like the rest.
+ARG NEXT_PUBLIC_VOICE_GUIDE_URL=""
+ENV NEXT_PUBLIC_VOICE_GUIDE_URL=$NEXT_PUBLIC_VOICE_GUIDE_URL
+
 ENV NEXT_TELEMETRY_DISABLED=1
 # This stage needs outbound network: next/font/google downloads Caprasimo and Figtree and
 # self-hosts them, and the build fails rather than falling back if it cannot reach Google.

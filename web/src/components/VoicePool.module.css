@@ -1,0 +1,251 @@
+/* The random-voice pool picker. Same tokens as every other screen — nothing here is styled
+   independently of globals.css. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+}
+
+.lede {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  max-width: 62ch;
+}
+
+/* The guide link. Sized as a chip rather than a button: it leaves the app, and it is an
+   aside to the choosing rather than a step in it. */
+.guide {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-accent-300);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.guide:hover {
+  background: var(--color-accent-200);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.count {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  color: var(--color-accent-800);
+}
+
+.linkBtn {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-accent-700);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  color: var(--color-accent-900);
+}
+
+.linkBtn:disabled {
+  color: var(--color-neutral-500);
+  text-decoration: none;
+  cursor: default;
+}
+
+.caption {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.warn {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+/* Scrolls on its own: nine languages of chips would otherwise push the Finish button off a
+   laptop screen, and this is the one panel on the page whose height follows the engine. */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 12px 6px 4px 2px;
+  border-top: 1px solid var(--color-divider-soft);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.groupHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.groupName {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--color-neutral-800);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+/* A real checkbox under a drawn chip, for the same reason the Toggle is: it has to be
+   reachable by keyboard and announce its own state. The chip holds two controls — the label
+   picks the voice, the round button plays it — so the padding lives on them rather than
+   here, and the whole chip stays one hit area with no dead strip between them. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 2px;
+  border-radius: 999px;
+  border: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.chip:hover {
+  border-color: var(--color-accent-300);
+}
+
+.chip[data-on] {
+  border-color: var(--color-accent-400);
+  background: var(--color-accent-100);
+  color: var(--color-accent-900);
+  font-weight: 600;
+}
+
+/* The pick half: everything but the play button, so a click anywhere on the name ticks it. */
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* On the label and the button separately, not on the chip: two focusable things in one chip,
+   and an outline around both of them says nothing about which one has the focus. */
+.pick:focus-within,
+.play:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}
+
+/* Hear this voice. Icon-only and small — 54 of them share the panel — with the line it
+   speaks on the title and the accessible name on the button. */
+.play {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-600);
+  cursor: pointer;
+}
+
+.chip[data-on] .play {
+  background: var(--color-accent-200);
+  color: var(--color-accent-800);
+}
+
+.play:hover {
+  background: var(--color-accent-300);
+  color: var(--color-accent-900);
+}
+
+.play[data-playing] {
+  background: var(--color-accent-600);
+  color: #fff;
+}
+
+.box {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chipName {
+  line-height: 1;
+}
+
+/* F / M. Decoration only — the accessible name carries the word. */
+.chipMeta {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+}
+
+.chip[data-on] .chipMeta {
+  color: var(--color-accent-600);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

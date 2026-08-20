@@ -3,6 +3,7 @@
 import { Volume2, VolumeX } from "lucide-react";
 import { Slider } from "@/components/Slider";
 import { Toggle } from "@/components/Toggle";
+import { MAX_VOLUME } from "@/lib/audioPlayer";
 import { updateSettings, type Settings } from "@/lib/settings";
 import styles from "./dashboard.module.css";
 
@@ -12,6 +13,10 @@ import styles from "./dashboard.module.css";
  * Everything here applies instantly and persists — there is no Save on the dashboard. The
  * source toggles deliberately do *not* retro-filter what is already queued: turning cheers
  * off stops new ones arriving, it does not delete the ones a viewer already paid for.
+ *
+ * The slider runs past 100% to `MAX_VOLUME`, i.e. it can amplify rather than only attenuate
+ * — a streamer whose capture chain is quiet has nowhere else to make it up. Loud lines clip
+ * up there; see the constant.
  */
 export function ControlBar({
   settings,
@@ -37,7 +42,7 @@ export function ControlBar({
           <Slider
             label="Master volume"
             min={0}
-            max={100}
+            max={Math.round(MAX_VOLUME * 100)}
             step={1}
             value={volume}
             ariaValueText={`${volume} percent`}

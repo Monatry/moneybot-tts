@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { MAX_VOLUME } from "./audioPlayer";
 import { DEFAULT_OBS_URL } from "./obsBridge";
 
 /**
@@ -44,7 +45,22 @@ export interface Settings {
   localTts: LocalTtsSettings;
   /** Whether a chatter may repin their own voice with a `[voice]` prefix. */
   allowChatterVoiceOverride: boolean;
+  /**
+   * Which voices a chatter nobody has heard before may be rolled. Empty is the default and
+   * means "every English voice"; see `randomPool` in lib/userVoices.ts for the whole ladder.
+   *
+   * A flat list of ids rather than anything structured, because that is all the engine
+   * publishes and all the picker needs — and it is stored as picked, not as filtered
+   * against the live list, so a pool chosen on the 54-voice server build survives being
+   * loaded by the 28-voice browser one instead of being silently trimmed to it.
+   */
+  randomVoices: string[];
   setupComplete: boolean;
+  /**
+   * Which revision of this shape the stored blob was written by, so a value already in a
+   * streamer's browser can be corrected once. See `SETTINGS_VERSION`.
+   */
+  version: number;
 }
 
 /**
@@ -98,6 +114,25 @@ function normalizeObs(value: Partial<ObsSettings> | undefined): ObsSettings {
     url: /^wss?:\/\/.+/i.test(url) ? url : DEFAULT_OBS.url,
     password: typeof value?.password === "string" ? value.password : "",
   };
+}
+
+/**
+ * The random-voice pool, cleaned: lower-cased, de-duplicated and sorted, so two stores that
+ * hold the same pool hold the same string and a `[]` written by an older build (or by hand)
+ * cannot reach `randomPool` as something other than an array of ids.
+ *
+ * Order is thrown away deliberately — the pool is a set, the picker renders it grouped by
+ * language, and a stable order keeps the settings blob from churning on every toggle.
+ */
+function normalizeRandomVoices(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const id = entry.trim().toLowerCase();
+    if (id) ids.add(id);
+  }
+  return [...ids].sort();
 }
 
 export const LOCAL_TTS_DEVICES = ["auto", "wasm", "webgpu"] as const;
@@ -261,6 +296,22 @@ export const DEFAULT_AVATAR: AvatarSettings = {
   },
 };
 
+/**
+ * The current revision of the stored settings blob.
+ *
+ * Bumped only when a value *already in a streamer's browser* has to be corrected. A new
+ * field needs nothing here — the one-level-deep merge in `load` defaults it on its own.
+ * This is for the other case, where the stored value is valid, was never chosen by anyone,
+ * and would otherwise outlive the decision that produced it.
+ *
+ * - **1 → 2: master volume forced back to the default.** It shipped at 0.72, and the one
+ *   control that changes it (the dashboard's slider) is a thing a streamer has to notice
+ *   and think to drag — so in practice every existing store holds a quiet value nobody
+ *   chose. Raising the default alone would have helped only installs that do not exist yet;
+ *   the migration is what reaches the stores already out there.
+ */
+export const SETTINGS_VERSION = 2;
+
 export const DEFAULT_SETTINGS: Settings = {
   auth: { channel: "", token: null, login: null, userId: null, scopes: [] },
   triggers: {
@@ -276,13 +327,21 @@ export const DEFAULT_SETTINGS: Settings = {
     // Design replaces the desktop app's whole-second gap with a segmented control
     // (MIN_DELAY_OPTIONS), so this is milliseconds now.
     minDelayMs: 2000,
-    masterVolume: 0.72,
+    // Full scale. Anything below it is quieter than the audio the model produced, and the
+    // dashboard's slider is there for a streamer who wants it quieter — see the 1 → 2
+    // migration in `load` for the stores that were left on the old 0.72 default.
+    masterVolume: 1,
   },
   avatar: DEFAULT_AVATAR,
   obs: DEFAULT_OBS,
   localTts: DEFAULT_LOCAL_TTS,
   allowChatterVoiceOverride: true,
+  // Empty, i.e. the default English pool. Not the eligible list spelled out: a stored list
+  // would freeze today's voices in, and a voice the engine gains later would never be rolled
+  // for anyone who set up before it existed.
+  randomVoices: [],
   setupComplete: false,
+  version: SETTINGS_VERSION,
 };
 
 const KEY = "moneybot.settings.v1";
@@ -302,11 +361,12 @@ export function normalize(s: Settings): Settings {
       ...s.audio,
       playbackRate: clamp(s.audio.playbackRate, 0.5, 2),
       minDelayMs: snapMinDelay(s.audio.minDelayMs),
-      masterVolume: clamp(s.audio.masterVolume, 0, 1),
+      masterVolume: clamp(s.audio.masterVolume, 0, MAX_VOLUME),
     },
     avatar: normalizeAvatar(s.avatar),
     obs: normalizeObs(s.obs),
     localTts: normalizeLocalTts(s.localTts),
+    randomVoices: normalizeRandomVoices(s.randomVoices),
   };
 }
 
@@ -373,11 +433,25 @@ function load(): Settings {
     // by reference to decide whether the post-subscribe state differs from the hydration
     // render — returning the shared DEFAULT_SETTINGS object here would look like "no change"
     // and leave `isHydrated` stuck false for a first-time visitor.
-    const parsed = (raw ? JSON.parse(raw) : {}) as Partial<Settings>;
+    const stored = raw ? (JSON.parse(raw) as Partial<Settings>) : null;
+    const parsed = stored ?? {};
+    // A blob with no `version` was written before the field existed, i.e. 1. *Nothing*
+    // stored is a first visit, which starts at the current version — there is no older
+    // value there to correct, and treating it as version 1 would run every future
+    // migration against the defaults for no reason.
+    const version = stored
+      ? typeof stored.version === "number"
+        ? stored.version
+        : 1
+      : SETTINGS_VERSION;
+    const audio = { ...DEFAULT_SETTINGS.audio, ...parsed.audio };
+    // The 1 → 2 correction. Assigned rather than merged, because the point is to overwrite
+    // a value that *is* present in the stored blob.
+    if (version < 2) audio.masterVolume = DEFAULT_SETTINGS.audio.masterVolume;
     // Merged one level deep rather than spread flat: a settings blob written by an older
     // build is missing whole sub-objects, and a shallow spread would hand the app an
     // `audio` with no `masterVolume` rather than the default one.
-    return normalize({
+    const migrated = normalize({
       auth: { ...DEFAULT_SETTINGS.auth, ...parsed.auth },
       triggers: {
         ...DEFAULT_SETTINGS.triggers,
@@ -385,7 +459,7 @@ function load(): Settings {
         cheers: { ...DEFAULT_SETTINGS.triggers.cheers, ...parsed.triggers?.cheers },
         redeems: { ...DEFAULT_SETTINGS.triggers.redeems, ...parsed.triggers?.redeems },
       },
-      audio: { ...DEFAULT_SETTINGS.audio, ...parsed.audio },
+      audio,
       // `normalizeAvatar` does its own one-level-deep merge, so a blob written before the
       // crossfade/caption/bob settings existed comes back with all three defaulted off.
       avatar: normalizeAvatar(parsed.avatar),
@@ -393,10 +467,32 @@ function load(): Settings {
       localTts: normalizeLocalTts(parsed.localTts),
       allowChatterVoiceOverride:
         parsed.allowChatterVoiceOverride ?? DEFAULT_SETTINGS.allowChatterVoiceOverride,
+      // `normalize` cleans it too; naming it here is what keeps a blob written before the
+      // pool existed from arriving as `undefined`.
+      randomVoices: normalizeRandomVoices(parsed.randomVoices),
       setupComplete: parsed.setupComplete ?? DEFAULT_SETTINGS.setupComplete,
+      version: SETTINGS_VERSION,
     });
+    // Written back so a migration is the one-time event it reads as. Skipping this would
+    // still be correct — every migration above is idempotent — but the blob would keep
+    // claiming version 1 until something else happened to save it, and the next migration
+    // author would be reasoning about a store that never moves forward.
+    if (version < SETTINGS_VERSION) persist(migrated);
+    return migrated;
   } catch {
     return structuredClone(DEFAULT_SETTINGS);
+  }
+}
+
+/**
+ * The only writer of the settings key. A full or blocked store costs the user their
+ * preferences on the next visit; it must not take down the setting they just changed.
+ */
+function persist(s: Settings) {
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {
+    /* nothing useful to do */
   }
 }
 
@@ -432,12 +528,7 @@ export const settingsStore = {
     ensureHydrated();
     const next = normalize(typeof update === "function" ? update(current) : update);
     current = next;
-    try {
-      window.localStorage.setItem(KEY, JSON.stringify(next));
-    } catch {
-      // A full or blocked store costs the user their preferences on the next visit; it
-      // must not take down the setting they just changed.
-    }
+    persist(next);
     emit();
   },
   subscribe(listener: () => void): () => void {

@@ -28,6 +28,8 @@ export interface QueueConfig {
   minDelayMs: number;
   playbackRate: number;
   allowChatterVoiceOverride: boolean;
+  /** The streamer's random-voice pool. Empty means the default; see `randomPool`. */
+  randomVoices: string[];
 }
 
 export interface QueueHandlers {
@@ -228,7 +230,8 @@ export class TtsQueue {
   /**
    * The voice this message is read in. Every chatter keeps one voice for good: a `[voice]`
    * prefix repins them to whatever they asked for (any language), and anyone without an
-   * entry yet is rolled a random English one and remembered.
+   * entry yet is rolled one out of `config.randomVoices` — the streamer's pool, which
+   * defaults to every English voice — and remembered.
    */
   private resolveVoice(req: TtsRequest, config: QueueConfig): string {
     const voices = this.getVoices();
@@ -245,7 +248,8 @@ export class TtsQueue {
     }
 
     // Null only when the voice list never loaded; the server's own default is the best
-    // guess left at that point.
-    return resolveVoiceFor(req.user, voices) ?? "af_sky";
+    // guess left at that point. The pool is read live from the config, so narrowing it on
+    // the setup screen applies to the next chatter rolled and not only to the next restart.
+    return resolveVoiceFor(req.user, voices, config.randomVoices) ?? "af_sky";
   }
 }

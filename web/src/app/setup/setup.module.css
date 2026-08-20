@@ -62,6 +62,13 @@
   gap: 18px;
 }
 
+/* The pool picker sits under the two columns, so it is the one panel that must not stretch
+   with them — `.panels` is the flexing child of `.body`, this is a fixed-height sibling. */
+.voicePanel {
+  flex: none;
+  gap: 12px;
+}
+
 .triggerRows {
   display: flex;
   flex-direction: column;

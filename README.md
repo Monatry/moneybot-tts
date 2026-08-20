@@ -36,7 +36,10 @@ Each directory keeps its own detailed README; this README describes the entire p
                                       │                                    (kokoro-js, WASM/WebGPU)
                                       │
                                       ├──→ Web Audio  ──→ the streamer's output device
-                                      └──→ BroadcastChannel ──→ /avatar ──→ OBS browser source
+                                      ├──→ BroadcastChannel ──→ /avatar in a browser window
+                                      └──→ obs-websocket ──────→ /avatar as an OBS browser source
+                                                                  └─ which runs all of the above
+                                                                     itself when nothing else is
 
                   a viewer types "[af_sky] hello chat"
                                ↑
@@ -50,16 +53,22 @@ The same source tree in `web/` builds against either engine, chosen by the
 
 | | **`server`** (default) | **`browser`** |
 |---|---|---|
-| Synthesised by | `server/`, over HTTP | `kokoro-js` in a Web Worker, in the page |
-| Needs `server/` running | yes | **no** |
+| Synthesised by | `server/`, over HTTP | `kokoro-js` in a Web Worker, in the page — except the OBS overlay |
+| Needs `server/` running | yes | only for the OBS overlay |
 | Compose file | `docker-compose.yaml` | `docker-compose.browser.yaml` |
 | Container · port | `moneytts` · `:3100` | `moneytts-browser` · `:3101` |
-| Voices | all **54** | the **28 English ones** |
+| Voices | all **54** | the **28 English ones**, or all 54 in the OBS overlay |
 | Good for | one machine doing the work for any number of streamers | a public URL where every visitor brings their own compute |
 
-Two things to know before choosing `browser`:
+Three things to know before choosing `browser`:
 
-- **Only the English voices.** `kokoro-js` maps `af_*`, `am_*`, `bf_*` and `bm_*` only, so
+- **The OBS overlay is the exception.** `/avatar` as an OBS browser source runs the bot on its own
+  when no dashboard is open — which is the point: TTS comes up with OBS instead of with a browser
+  tab you have to remember. OBS's browser cannot synthesise, though (no WebGPU, and WebAssembly is
+  far too slow for a chat message), so that one page uses `server/` even on this build, and gets
+  all 54 voices because of it. So this build does need a reachable `server/` after all, and its
+  `/api/tts/*` is reachable by anyone who finds it.
+- **Only the English voices** *(everywhere but that overlay)***.** `kokoro-js` maps `af_*`, `am_*`, `bf_*` and `bm_*` only, so
   `[jf_alpha]`-style prefixes do nothing on that build even though `voice-guide/` still advertises
   all 54. Chatters pinned to a voice it does not have are silently re-rolled.
 - **WebGPU is not always trustworthy.** The app picks WebGPU where the browser offers a working
@@ -113,11 +122,16 @@ cd web && cp .env.example .env
   <https://dev.twitch.tv/console/apps>. No client secret is needed: this is the implicit flow
   and the ID is public, which is also why it is baked into the browser bundle at build time
   (change it, then `docker compose up -d --build`).
-- **`TTS_BASE_URL`** - *server engine only.* Any instance of `server/`; running it locally that
-  would be `http://localhost:8020`. The browser engine never reads it, and its compose file does
-  not ask for it.
+- **`TTS_BASE_URL`** - Any instance of `server/`; running it locally that would be
+  `http://localhost:8020`. Both engines ask for it: the server engine synthesises everything
+  through it, the browser engine needs it for the OBS overlay alone.
 - **`NEXT_PUBLIC_TTS_ENGINE`** - `server` (default) or `browser`. The two compose files set it
   themselves; set it in `.env` only to pick an engine for `npm run dev`.
+- **`NEXT_PUBLIC_VOICE_GUIDE_URL`** - *optional.* Where setup's random-voice pool links: a
+  deployment of `voice-guide/`, i.e. the page a *chatter* is sent to. The pool itself plays a
+  sample per voice without it, from `web/public/voice-samples/` - the same recordings, copied
+  across by `web/tools/build-voice-catalogue.py`. Unset renders no link and changes nothing
+  else, which is why this one has no default - there is no guide to guess at.
 
 Twitch compares `redirect_uri` as a raw string, so register `<your-url>/auth/callback` for **every**
 URL you serve the app from, including `http://localhost:3000/auth/callback` for dev. A missing one
@@ -134,8 +148,10 @@ mono samples.
 **The web app** keeps all of its data in the streamer's own browser and stores nothing on the
 server. Settings, the Twitch token, per-chatter voice assignments and the avatar images live in
 localStorage and IndexedDB. On the server engine its only server code is `/api/tts/*`, which
-proxies the TTS server because that service sends no CORS headers; on the browser engine there is
-no server code in play at all. The container hands over a bundle and is never spoken to again.
+proxies the TTS server because that service sends no CORS headers; on the browser engine the same
+route serves the OBS overlay and nothing else. The OBS overlay keeps its own copy of the settings,
+pushed to it over obs-websocket, because OBS's browser is a separate profile with no access to the
+dashboard's.
 
 **The browser engine runs inference in a Web Worker**, never on the main thread. A sentence is a
 few hundred milliseconds to a few seconds of solid CPU, and the thread it would otherwise block is
@@ -159,8 +175,10 @@ server/        FastAPI + kokoro-onnx streaming TTS service
 web/           Next.js 15 / React 19 app: the streamer's dashboard and OBS overlay
   src/lib/       bot runtime, TTS queue, Web Audio player, Twitch IRC + EventSub
   src/lib/kokoro/  browser engine: the worker, its protocol, and the page's half of it
-  src/app/       routes: /login /setup /dashboard /avatar-config /avatar
+  src/app/       routes: / /setup /dashboard /avatar-config /avatar
   src/app/api/tts/ server engine only: the proxy to server/
+  tools/         build-samples.py (landing preview), build-voice-catalogue.py (the pool's
+                 baked voice list and its samples, from voice-guide/)
 voice-guide/   the public catalogue page
   public/        index.html, app.js, generated voices.js, 54 wav samples
   tools/         build-voices.py (generates the catalogue), stamp-assets.py (cache busting)

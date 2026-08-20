@@ -16,9 +16,11 @@ import styles from "./home.module.css";
  * Screen 2a — the public landing page.
  *
  * This route used to be nothing but the entry router (login → setup → dashboard). The
- * handoff's navigation rule now reads "home page → login → …", so the redirect is gone and
- * `/` is a real page: it is the URL a streamer is sent in chat, and it has to explain the app
- * to somebody who has never heard of it.
+ * handoff's navigation rule now reads "home page → …", so the redirect is gone and `/` is a
+ * real page: it is the URL a streamer is sent in chat, and it has to explain the app to
+ * somebody who has never heard of it. It is also the only way in — the separate `/login`
+ * screen is gone, because this page's CTA does the OAuth itself, so there is nothing left
+ * for a second sign-in screen to ask.
  *
  * What survives of the old router is the *destination*: a visitor who has already signed in
  * gets a one-click way back in rather than being asked to sign in again. Bouncing them

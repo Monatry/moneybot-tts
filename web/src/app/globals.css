@@ -9,14 +9,29 @@
 
 :root {
   --color-bg: #ffffff;
-  --color-surface: #fffcf2;
+  /*
+   * The panel backing. Darkened from the handoff's #fffcf2, which was about one percent off
+   * the white page behind it and only resolved as a separate surface once a screen dimmed —
+   * a card you cannot see the edge of is doing none of the work a card is for.
+   *
+   * Leaning gold rather than merely grey-darker: the tint holds roughly --color-accent's own
+   * hue (R-G to G-B at about 1:2.5), so a panel reads as the pale end of the gold ramp
+   * instead of as a dirty white.
+   *
+   * The warm ramp's light end moves with it (see --color-accent-100): the layering here is
+   * page → surface → accent-100, and darkening only the middle one would have put the inner
+   * tint *lighter* than the panel it sits on.
+   */
+  --color-surface: #fdf5e2;
   --color-text: #1b1815;
   --color-accent: #c8a02a;
   --color-accent-2: #9146ff;
   --color-divider: rgba(27, 24, 21, 0.12);
   --color-divider-soft: rgba(27, 24, 21, 0.09);
 
-  --color-accent-100: #fdf7e2;
+  /* One step in from --color-surface, and kept that way — this is the tint every inner card,
+     pill and banner sits on top of a panel with. */
+  --color-accent-100: #f6ecce;
   --color-accent-200: #f7e9b9;
   --color-accent-300: #efd582;
   --color-accent-400: #dfbc4c;

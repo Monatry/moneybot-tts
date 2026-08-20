@@ -2,10 +2,15 @@
 
 /**
  * Remembers which voice every chatter speaks with. Port of the desktop `UserVoiceService`,
- * and the rule is unchanged: there is no streamer-facing voice picker, because the voice is
- * a property of the *chatter*, not of the app. A name that has never been heard gets a
- * random voice rolled for it, keeps that voice forever, and only changes it by asking for
- * another one with a `[voice]` prefix.
+ * and the rule is unchanged: the streamer does not assign voices, because a voice is a
+ * property of the *chatter*, not of the app. A name that has never been heard gets a random
+ * voice rolled for it, keeps that voice forever, and only changes it by asking for another
+ * one with a `[voice]` prefix.
+ *
+ * What the streamer *can* choose is which voices that roll draws from — `settings.randomVoices`,
+ * threaded in as `chosen` below. It narrows the pool and nothing else: an assignment already
+ * made is never revisited, so narrowing the pool does not re-roll the chatters who are
+ * already speaking, and a chatter can still name any voice the engine has.
  *
  * Its own localStorage key, not part of `settings`: entries are written whenever a new
  * chatter first speaks, while settings are rewritten wholesale from every control on every
@@ -63,6 +68,47 @@ export function isDefaultEligible(voice: string): boolean {
   return c === "a" || c === "b";
 }
 
+/**
+ * The voices a new chatter may be rolled, given what the engine offers and what the
+ * streamer picked on the setup screen.
+ *
+ * `chosen` is `settings.randomVoices`: an explicit pool, empty when the streamer has never
+ * narrowed it. Empty therefore means "the default", not "nothing" — a genuinely empty pool
+ * would mean nobody could ever be rolled a voice, so every step below widens rather than
+ * gives up:
+ *
+ *   1. the streamer's pick, matched against the live list;
+ *   2. every default-eligible voice — English, minus the blocked ones;
+ *   3. everything not blocked, for a server serving no English at all;
+ *   4. everything.
+ *
+ * An explicit pick is authoritative where the default is not. It may name a non-English
+ * voice, and it may name a blocked one: `isDefaultEligible` exists to keep a voice nobody
+ * asked for from being handed out unasked, and a checkbox on the setup screen *is* asking.
+ *
+ * Case comes from `available`, never from `chosen` or the store, so what reaches the engine
+ * is always a string it actually published.
+ */
+export function randomPool(
+  available: readonly string[],
+  chosen: readonly string[] = [],
+): string[] {
+  if (chosen.length > 0) {
+    const wanted = new Set(chosen.map((v) => v.toLowerCase()));
+    // Filtering the live list rather than mapping over `chosen` also drops anything the
+    // engine has retired, or never had: a pool picked on the 54-voice server build is
+    // stored as-is and still works on the 28-voice browser one.
+    const picked = available.filter((v) => wanted.has(v.toLowerCase()));
+    if (picked.length > 0) return picked;
+  }
+
+  const english = available.filter(isDefaultEligible);
+  if (english.length > 0) return english;
+
+  const unblocked = available.filter((v) => !NEVER_ROLLED.has(v.toLowerCase()));
+  return unblocked.length > 0 ? unblocked : [...available];
+}
+
 export function getUserVoice(user: string): string | null {
   if (!user.trim()) return null;
   return store()[user.toLowerCase()] ?? null;
@@ -83,6 +129,11 @@ export function setUserVoice(user: string, voice: string) {
  * when the voice they were on no longer exists on the server, so a retired voice cannot
  * wedge one chatter into failing synthesis forever.
  *
+ * `chosen` only reaches the roll, never the lookup: a chatter who already has a voice keeps
+ * it even once the streamer narrows the pool past it. Re-rolling them instead would change
+ * the voice of everyone the pool dropped, which is the one thing this module promises never
+ * to do.
+ *
  * Returns null only when `available` is empty, i.e. the voice list never loaded. The empty
  * check comes first deliberately: without it a failed voice load would re-roll everyone on
  * every message.
@@ -91,7 +142,11 @@ export function setUserVoice(user: string, voice: string) {
  * never stored, so a test cannot burn an entry on a name nobody chats under — and each
  * press rolls a fresh one.
  */
-export function resolveVoiceFor(user: string, available: readonly string[]): string | null {
+export function resolveVoiceFor(
+  user: string,
+  available: readonly string[],
+  chosen: readonly string[] = [],
+): string | null {
   if (available.length === 0) return null;
 
   const named = user.trim().length > 0;
@@ -108,13 +163,7 @@ export function resolveVoiceFor(user: string, available: readonly string[]): str
     }
   }
 
-  let pool = available.filter(isDefaultEligible);
-  // Only if the server is serving nothing English at all — better an unexpected accent
-  // than silence. Still not the blocked voices: that exclusion is absolute, and this
-  // fallback would otherwise hand one out precisely when the pool is thinnest.
-  if (pool.length === 0) pool = available.filter((v) => !NEVER_ROLLED.has(v.toLowerCase()));
-  if (pool.length === 0) pool = [...available];
-
+  const pool = randomPool(available, chosen);
   const picked = pool[Math.floor(Math.random() * pool.length)];
   if (named) {
     s[key] = picked;

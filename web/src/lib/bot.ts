@@ -180,6 +180,7 @@ class Bot {
           minDelayMs: s.audio.minDelayMs,
           playbackRate: s.audio.playbackRate,
           allowChatterVoiceOverride: s.allowChatterVoiceOverride,
+          randomVoices: s.randomVoices,
         };
       },
       {

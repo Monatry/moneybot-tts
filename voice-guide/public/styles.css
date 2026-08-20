@@ -265,6 +265,30 @@ code {
   font-size: 19px;
   letter-spacing: -0.01em;
 }
+/*
+ * The repository this bot is built from, in the far corner of the bar. Deliberately quiet:
+ * the page's job is picking a voice, and chat is the audience — so the mark carries the link
+ * on its own, at the footer's text weight, and only takes the accent on hover. The label
+ * lives in title/aria-label rather than on screen for the same reason.
+ */
+.repo-link {
+  margin-left: auto;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-faint);
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+.repo-link:hover {
+  color: var(--color-accent-700);
+  background: var(--color-accent-100);
+}
+.repo-link svg {
+  display: block;
+}
 
 /* — page — */
 .page {

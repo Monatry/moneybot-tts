@@ -17,6 +17,12 @@ services:
         # for the same reason as TTS_BASE_URL below — a build with no client ID produces an
         # app that can only fail at the sign-in button, so stop here instead.
         NEXT_PUBLIC_TWITCH_CLIENT_ID: ${NEXT_PUBLIC_TWITCH_CLIENT_ID:?set it in web/.env — copy web/.env.example}
+
+        # The voice guide the setup screen links to, from ./.env. Optional: unset renders no
+        # link, which is why it takes an empty default rather than `:?` — a guide is one
+        # deployment's static page (../../voice-guide), so there is nothing to guess at and
+        # nothing that breaks without it. Build-time, like every NEXT_PUBLIC_* here.
+        NEXT_PUBLIC_VOICE_GUIDE_URL: ${NEXT_PUBLIC_VOICE_GUIDE_URL:-}
     container_name: moneytts
     restart: unless-stopped
     environment:

@@ -18,6 +18,19 @@
 /** How far ahead of the clock the first chunk of an utterance is scheduled. */
 const LEAD_SECONDS = 0.15;
 
+/**
+ * The loudest the master gain will go, as a multiplier — i.e. 200%.
+ *
+ * Above 1 this is a real amplifier and not a louder mix: the gain is applied to samples
+ * that already peak near full scale on a loud line, and the destination clamps to
+ * [-1, 1], so the peaks of that line hard-clip. There is no limiter in the graph and
+ * deliberately so — one would change the tone of every message to protect the few that
+ * are already loud. The ceiling exists because a streamer whose OBS or capture card is
+ * quiet has nowhere else to make it up, and because the honest fix for "too quiet" is
+ * headroom, not silence.
+ */
+export const MAX_VOLUME = 2;
+
 /** Chunks smaller than this are accumulated rather than scheduled — one node per 4 KB of
  *  network chunk would be thousands of nodes for a long message. */
 const MIN_FLUSH_SAMPLES = 4800; // 0.2 s at 24 kHz
@@ -88,7 +101,7 @@ export class PcmPlayer {
   }
 
   setVolume(v: number) {
-    this.volume = Math.min(1, Math.max(0, v));
+    this.volume = Math.min(MAX_VOLUME, Math.max(0, v));
     if (this.gain && this.ctx) {
       // Ramped rather than assigned: a step change on a live signal clicks.
       this.gain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.02);

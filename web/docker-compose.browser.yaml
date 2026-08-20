@@ -37,6 +37,12 @@ services:
         # Optional override for the Hugging Face repo the weights come from. Unset uses the
         # default in ttsEngine.ts.
         NEXT_PUBLIC_KOKORO_MODEL_ID: ${NEXT_PUBLIC_KOKORO_MODEL_ID:-}
+
+        # The voice guide the setup screen links to, from ./.env — shared with the other
+        # stack. Note that this build carries the English voices only while a guide lists
+        # all 54; the screen says so next to the link, because the overlay this stack feeds
+        # does have all 54. Optional: unset renders no link at all.
+        NEXT_PUBLIC_VOICE_GUIDE_URL: ${NEXT_PUBLIC_VOICE_GUIDE_URL:-}
     container_name: moneytts-browser
     restart: unless-stopped
 

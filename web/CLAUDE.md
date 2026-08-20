@@ -48,6 +48,13 @@ npm run typecheck  # tsc --noEmit
 # public/samples/*.mp3 and the generated src/lib/previewSamples.ts. Not part of the build —
 # run it by hand when the line, the voice list or the TTS model changes.
 python3 tools/build-samples.py [http://127.0.0.1:8020]
+
+# The setup screen's voice list and the sample each chip plays. Stdlib python + ffmpeg, no
+# server needed: it reads ../voice-guide/public/voices.js and re-encodes that directory's
+# wavs into public/voice-samples/*.mp3, writing the generated src/lib/voiceCatalogueData.ts
+# alongside them. Run it after the guide's own tools/build-voices.py, i.e. when a voice is
+# added, retired, or given a new sample line.
+python3 tools/build-voice-catalogue.py
 ```
 
 `npm run dev` builds whichever engine `./.env` names in `NEXT_PUBLIC_TTS_ENGINE` (unset =
@@ -410,9 +417,23 @@ Nothing above those two functions knows a bridge exists.
 `settings.ts` merges stored blobs **one level deep**, not with a flat spread — an older blob
 missing a whole sub-object would otherwise reach the app without its defaults.
 
+A new *field* needs nothing more than that. **`SETTINGS_VERSION` is for the other case** — a
+stored value that is valid, was never chosen by anyone, and has to be corrected in place. The
+migration runs in `load()`, is idempotent, and writes the blob back so it stops claiming the
+old version. A blob with no `version` is 1; *nothing stored* is a first visit and starts at
+the current version, so migrations never run against the defaults.
+
+- **1 → 2 forces `audio.masterVolume` back to the default**, which is now `1`. It shipped at
+  `0.72`, and the dashboard slider that changes it (`dashboard/ControlBar.tsx`) is one a
+  streamer has to notice, so existing stores hold a quiet value nobody chose — raising the
+  default alone would have reached only installs that do not exist yet. `MAX_VOLUME` (in `audioPlayer.ts`, the module that owns the gain
+  node) is **2**, so the setting goes to 200%: above 1 it is a real amplifier, and since
+  Kokoro's output already peaks near full scale, loud lines hard-clip up there. There is no
+  limiter in the graph on purpose — one would change the tone of every message to protect
+  the few that are already loud.
+
 Anything that routes on stored state (`setupComplete`, `auth.channel`) must wait on
-`useSettingsReady()`. Acting on the pre-hydration snapshot bounces returning users to
-`/login`.
+`useSettingsReady()`. Acting on the pre-hydration snapshot bounces returning users to `/`.
 
 The token sits in plaintext in `localStorage`. That is a knowing tradeoff versus the desktop
 app's DPAPI wrapping — it's a scoped, revocable, non-refreshable implicit-flow token. See
@@ -463,12 +484,51 @@ Behaviour worth not breaking:
 - **A chatter keeps one voice forever.** New names get a random *English* voice only (Kokoro
   prefixes ids by language; `a`/`b` are the English ones). A `[voice]` prefix repins to any
   voice including non-English. A stored voice the server has retired is silently re-rolled.
+- **The streamer narrows the roll, never the assignment.** `settings.randomVoices` is the
+  pool the roll draws from, picked on `/setup` (`components/VoicePool.tsx`) and applied in
+  `randomPool()` in `lib/userVoices.ts`. It reaches the queue through `QueueConfig` and is
+  read live, so a change applies to the next chatter rolled rather than the next restart.
+  Five things about it are load-bearing:
+  - **Empty means the default, not "no voices".** A pool that could be empty would mean a
+    chatter who can never be rolled anything, so `randomPool` widens instead of ever
+    returning nothing: picks → English → unblocked → everything. The picker renders an empty
+    list as the default set, ticked, and says so — otherwise a first visit reads as a pool
+    somebody switched off, and unticking the last voice reads as a bug rather than as a
+    reset.
+  - **An explicit pick outranks both `isDefaultEligible` and `NEVER_ROLLED`.** Those exist to
+    stop a voice nobody asked for being handed out unasked; a ticked box *is* asking. So a
+    pool may be all Japanese, and `af_nicole` is rollable if and only if it was ticked.
+  - **It never re-rolls anyone.** `chosen` reaches the roll and not the lookup, so narrowing
+    the pool past a chatter's voice leaves that chatter exactly where they were. Re-rolling
+    on a settings change is the one thing `userVoices.ts` promises not to do.
+  - The two builds share a settings blob and do not share a voice list, so ids are stored as
+    picked rather than filtered against the live list: a pool chosen on the 54-voice server
+    build survives being opened by the 28-voice browser one. The picker says how many of them
+    this build has no voice for, and keeps them — including through "Select all", which
+    unions them back in rather than quietly dropping what it cannot draw.
+  - **The list the picker renders is baked into the bundle, not the engine's.** It is
+    `lib/voiceCatalogue.ts` over the generated `voiceCatalogueData.ts`, and it used to be
+    `bot.voices`: the one screen where voices get chosen needed a reachable engine to render
+    at all, so a whitelist rejection or an unstarted Kokoro box left a streamer with an empty
+    panel and no way to pick. Kokoro's 54 are a fixed set in practice. What is still
+    per-build is which of them this bundle can *speak*, and that is all `voiceCatalogue`
+    decides — the browser engine narrows to Kokoro's `a`/`b` language letters, i.e. the 28
+    English voices kokoro-js maps, by letter rather than by an id list so a new English voice
+    needs no code change. The engine's own list is still fetched (`ensureVoices` on the same
+    screen) and still what synthesis and `randomPool` run against; it is only no longer what
+    draws the checkboxes.
 - **An empty redeem name matches nothing**, not everything.
-- **No chat composer.** The app reads chat and never posts, which is what the login screen
+- **No chat composer.** The app reads chat and never posts, which is what the sign-in flow
   promises. The design draws one; it is omitted by request.
 - **No "Connect your channel" setup step.** The design's screen 1b asked for the channel and
-  the token that `/login` has already collected, so it was removed by request — `/setup` is
-  now the preferences screen alone.
+  the token that `/` has already collected, so it was removed by request — `/setup` is now
+  the preferences screen alone.
+- **No `/login` screen either.** Screen 1a existed as its own route until the landing page
+  grew the same "Sign in with Twitch" button, at which point it was two screens asking one
+  question — and one of them was reachable only by accident (the dashboard's
+  not-set-up guard sent first-run visitors there). Removed by request; the guard now
+  replaces to `/`, whose CTA already reads the stored state to decide between signing in,
+  finishing setup and opening the dashboard.
 
 Queue durations and the "6 waiting · 1m 12s" total are estimates from a three-point linear
 fit in `estimateSeconds` (~0.06 s/char + 0.3 s fixed). Re-measure if the TTS model changes.
@@ -477,9 +537,8 @@ fit in `estimateSeconds` (~0.06 s/char + 0.3 s fixed). Re-measure if the TTS mod
 
 | Route | Screen |
 | --- | --- |
-| `/` | public landing page (handoff screen `2a`) — see below |
-| `/login` | Twitch OAuth, or channel + pasted token |
-| `/setup` | triggers and audio preferences |
+| `/` | public landing page (handoff screen `2a`) and the only sign-in — see below |
+| `/setup` | triggers, audio preferences, and the random-voice pool |
 | `/dashboard` | queue, chat, controls |
 | `/avatar-config` | idle image, talking frames, fps, background, crossfade / caption / bob, the OBS connection |
 | `/avatar` | OBS browser source, transparent background |
@@ -491,8 +550,9 @@ fit in `estimateSeconds` (~0.06 s/char + 0.3 s fixed). Re-measure if the TTS mod
 
 `/` was an entry router — a spinner that read `localStorage` and replaced itself with
 `/login`, `/setup` or `/dashboard`. The handoff's navigation rule now starts a step earlier
-("home page → login → …"), so it is a real page: the URL a streamer gets sent in chat, which
-has to explain the app to somebody who has never heard of it.
+("home page → …"), so it is a real page: the URL a streamer gets sent in chat, which has to
+explain the app to somebody who has never heard of it. It is also where signing in happens:
+the separate `/login` route is gone, since its CTA and this page's are the same button.
 
 - **The redirect is gone, on purpose.** Sending a signed-in visitor straight to `/dashboard`
   was the obvious alternative and makes the landing page unreachable for exactly the person
@@ -531,8 +591,10 @@ has to explain the app to somebody who has never heard of it.
   OBS screenshots they live in `public/`, which `output: "standalone"` omits and the
   Dockerfile copies explicitly.
 - The **login screen also changed in that handoff revision** (Twitch OAuth only, the manual
-  channel + token form removed, a three-item reassurance list in its place). That was left
-  alone by request — this pass was the homepage and nothing else.
+  channel + token form removed, a three-item reassurance list in its place). It was left
+  alone at the time — that pass was the homepage and nothing else — and has since been
+  deleted outright rather than updated: see "No `/login` screen either" above. So the
+  prototype's `1a` is a screen this app no longer has.
 
 ## Design handoff
 
@@ -617,6 +679,20 @@ are baked in at build time, so `--build` is not optional and `restart` does noth
   `/moneytts` segment matters. **Both stacks sign in as the same Twitch app**, so the public
   host needs its own registration; the private one's does not cover it, and a missing one is
   a `redirect_mismatch` at the sign-in button.
+- **`NEXT_PUBLIC_VOICE_GUIDE_URL`** is where the pool picker's "Hear them all" link points —
+  a voice guide, i.e. `../voice-guide` served somewhere. Build-time like the rest, and the
+  one `NEXT_PUBLIC_*` here that is **optional**: unset renders no link and nothing else
+  changes. It gets no default and no `:?` on purpose — unlike `TTS_BASE_URL` there is nothing
+  to guess at (a guide is one deployment's static page), so the choice is between no link and
+  a link to somebody else's hostname — and since the picker now plays a sample per voice
+  itself, an unset value costs a streamer nothing but the page a *chatter* is sent to.
+  Those samples are **pre-rendered mp3s in `public/voice-samples/`**, re-encoded by
+  `tools/build-voice-catalogue.py` from the very wavs the guide plays, so a chip and a card
+  are the same recording and neither can drift. Synthesising them live was the alternative
+  and is wrong on both builds, the same way it is wrong on the landing page: a server build
+  would be 54 syntheses through the relay from a setup screen, and a browser build would pull
+  86 MB of weights before the first one. 54 clips are ~2.2 MB in the image, against 13 MB of
+  wav — mp3 for the same reason `tools/build-samples.py` uses it.
 - The Docker build needs network access: `next/font/google` fetches Caprasimo and Figtree at
   build time.
 
